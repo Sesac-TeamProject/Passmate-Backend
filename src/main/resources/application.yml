@@ -80,3 +80,8 @@ passmate:
     webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:}
+    jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
+    token-uri: https://oauth2.googleapis.com/token
+    issuers: https://accounts.google.com,accounts.google.com

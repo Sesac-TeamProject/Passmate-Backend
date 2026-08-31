@@ -3,6 +3,30 @@
 AI 기반 실시간 문제풀이 플랫폼. 호스트가 방을 만들고 참가자가 PIN으로 입장해 실시간으로 문제를 푼다.
 Spring Boot 3.5 · Kotlin 2.2 · JVM 17 · MySQL 8.0 · S3 · 포트원(PortOne).
 
+## ⚠️ 코드만으로 끝나지 않는 기능 — 사용자 작업을 먼저 알린다
+
+외부 콘솔 설정·계정 발급·키 등록처럼 **사용자가 직접 해야 완성되는** 기능이 많다.
+코드를 다 짜도 그 작업이 끝나기 전까지 기능은 동작하지 않는다.
+
+1. **구현 전에 알린다** — 어디서(콘솔·서비스), 무엇을, 어떤 값을 받아 어디에 넣는지 목록으로 준다
+2. **"완료"라고 말하지 않는다** — `코드 완료 / 기능 미완`으로 구분해서 보고한다. 사용자 작업이 남아 있으면 그 기능은 미완이다
+3. **사용자 작업이 끝난 것을 확인한 뒤에 다음 작업을 제안한다** — 확인은 말이 아니라 실제 호출·조회로 검증한다
+4. 사용자 작업이 남아 있으면 **다음 작업으로 넘어가지 않고 멈춘다**. 막히지 않은 다른 일을 먼저 하는 게 나아 보이면, 그걸 제안하되 **결정은 사용자가 한다**
+
+### 사용자 작업 현황
+
+| 기능 | 사용자가 할 일 | 받는 값 → 넣을 곳 | 상태 |
+|---|---|---|---|
+| Google 로그인 | Google Cloud → OAuth 동의 화면 + 클라이언트 ID(웹·Android·iOS) | 웹 클라이언트 ID → `GOOGLE_CLIENT_ID` | ⬜ 대기 |
+| AI 문제 생성 | Anthropic 콘솔에서 API 키 발급 | `ANTHROPIC_API_KEY` | ⬜ 대기 |
+| 코인 충전·결제 | 포트원 가입 → 테스트 채널 · 웹훅 등록 | `PORTONE_STORE_ID` · `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` | ⬜ 대기 |
+| 파일 업로드 | S3 버킷 생성 + IAM 사용자·정책 | `S3_BUCKET` · `AWS_REGION` · 자격증명 | ⬜ 대기 |
+| 푸시 알림 | Firebase 프로젝트 + 서비스 계정 키 | FCM 자격증명 | ⬜ 대기 |
+| 배포 | AWS 계정 · 도메인 구입 · 인증서(certbot) | EC2 · RDS · SSM 파라미터 | ⬜ 대기 |
+
+> 앱(Android·iOS)은 자기 클라이언트 ID가 아니라 **웹 클라이언트 ID를 `serverClientId`로** 지정해 ID 토큰을 받아야 `aud` 검증을 통과한다.
+> 운영 리디렉션 URI 등록에는 **https 도메인**이 필요하므로 도메인·인증서가 Google 설정의 선행 조건이다.
+
 ## 문서 (진실의 원천)
 
 충돌하면 **피그마 v6 화면 > 기능 명세서 v2 > API 명세서 v2 > ERD v2** 순으로 위쪽이 이긴다.
@@ -61,7 +85,7 @@ kr/passmate/
 
 ## ⚠️ Redis는 후순위 — 지금은 쓰지 않는다
 
-MVP 1차에서는 **Redis를 도입하지 않는다.** `docker-compose.local.yml`에도 MySQL만 올린다.
+MVP 1차에서는 **Redis를 도입하지 않는다.** `docker/compose.local.yml`에도 MySQL만 올린다.
 아키텍처 문서의 Redis 설계는 2차 도입 시점의 목표이고, 지금은 아래 대체안으로 구현한다.
 
 | 원래 Redis 용도 | 지금 구현 | 나중 전환 |
@@ -100,12 +124,29 @@ WebSocket/STOMP는 Redis와 무관하다(simple broker = 인메모리). 실시�
 ## 로컬 실행
 
 ```bash
-docker compose -f docker-compose.local.yml up -d              # MySQL 8
+docker compose -f docker/compose.local.yml up -d    # MySQL 8
 ./gradlew bootRun --args='--spring.profiles.active=local'     # Flyway 적용 + 시드
 ```
 
 프로파일은 `local` / `prod` 두 개. 시드(`DevSeedRunner`)와 `POST /auth/dev-login`은 `@Profile("local","dev")` 한정.
-스키마가 꼬이면 `docker compose -f docker-compose.local.yml down -v` 후 재기동(V1부터 재적용).
+스키마가 꼬이면 `docker compose -f docker/compose.local.yml down -v` 후 재기동(V1부터 재적용).
+
+### 시크릿 취급
+
+`.env` 처럼 시크릿이 들어 있을 수 있는 파일은 **값을 출력하지 않는다.** 필요한 정보는 대개 "설정됐는가" 하나뿐이다.
+
+```bash
+grep -q '^GOOGLE_CLIENT_ID=..' .env && echo "설정됨" || echo "없음"   # 존재 여부만
+```
+
+부득이 여러 줄을 봐야 하면 **기본을 전량 마스킹**으로 두고 시작한다 — 특정 값 형태만 가리는 방식은
+형태가 다른 줄(예: `GOCSPX-…` 시크릿)이 그대로 새어 나간다.
+
+```bash
+sed -E 's/=.*/=***/' .env        # 키 이름만 확인
+```
+
+한 번 출력된 값은 대화·로그·세션 기록에 남아 되돌릴 수 없다. 노출됐다면 **해당 시크릿을 재발급**하고 알린다.
 
 ## Git
 
@@ -113,8 +154,11 @@ docker compose -f docker-compose.local.yml up -d              # MySQL 8
 - `main`에 직접 커밋·push 금지. `develop` → `main`은 PR로만 병합하고, 그 병합이 배포 트리거다
 - **모든 작업은 `develop`에서 분기한다** — `feat/…` · `fix/…` 브랜치를 파서 작업하고 PR로 `develop`에 병합한다. 예외 없음
 - 커밋 메시지는 한국어, 형식 `feat: 방 생성 API 구현`
-- PR·이슈는 `.github/` 템플릿을 따른다
-- 레포에는 소스만 둔다. 빌드 산출물(`build/` `.gradle/` `.kotlin/`)·시크릿(`.env`)·개인 IDE 설정은 커밋하지 않는다 — 배포 이미지는 Dockerfile 이 소스에서 다시 빌드한다
+- **기능 단위 작업이 끝나면 `develop`에 PR을 올려 머지하고, 다음 작업은 새 브랜치를 파서 시작한다.** 머지된 브랜치에서 이어서 작업하지 않는다
+- PR·이슈는 `.github/` 템플릿을 따른다. CONTRIBUTING.md · CODEOWNERS 도 루트가 아니라 `.github/` 안에 둔다(깃허브가 거기서도 인식한다)
+- **PR 본문은 짧게** — `한 일` · `남은 일/확인 필요` · `이슈·공유사항`의 핵심만. 코드 설명을 늘어놓지 않는다. 템플릿에서 비는 항목은 지운다
+- **루트는 비워 둔다** — 규칙은 `.claude/`, 도커 설정은 `docker/`, 깃허브 설정은 `.github/`, 문서는 `docs/`. 빌드 파일(`build.gradle.kts` · `gradlew`)과 `README.md` 처럼 루트에 있어야 동작하는 것만 남긴다
+- 레포에는 소스만 둔다. 빌드 산출물(`build/` `.gradle/` `.kotlin/`)·시크릿(`.env`)·개인 IDE 설정은 커밋하지 않는다 — 배포 이미지는 `docker/Dockerfile` 이 소스에서 다시 빌드한다
 
 ## 하지 말 것
 
@@ -128,3 +172,5 @@ docker compose -f docker-compose.local.yml up -d              # MySQL 8
 8. **Redis 관련 코드·의존성 추가** (후순위 결정, 위 §Redis 참고)
 9. 이메일/비밀번호 인증 구현 (Google 로그인 단일, 해당 API 5건은 보류)
 10. `main`에 직접 커밋·push (작업과 push는 `develop`에서)
+11. 외부 설정이 남은 기능을 "완료"라고 보고하거나, 사용자 작업 확인 전에 다음 작업을 제안하기
+12. `.env` 등 시크릿이 있을 수 있는 파일의 값을 출력하기 (존재 여부만 확인, 부득이하면 전량 마스킹)

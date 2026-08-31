@@ -1,0 +1,38 @@
+# 로컬 개발용 — MySQL 8 만 띄운다.
+# Redis는 후순위(1차 MVP 미도입). .claude/CLAUDE.md §Redis 참고.
+#
+#   기동:  docker compose -f docker/compose.local.yml up -d
+#   초기화: docker compose -f docker/compose.local.yml down -v   (스키마가 꼬였을 때, V1부터 재적용)
+
+# 프로젝트 이름을 고정한다 — compose 파일을 옮겨도 컨테이너·네트워크·볼륨 이름이 그대로다
+name: passmate-backend
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: passmate-mysql
+    ports:
+      # 호스트 3306 은 맥에 MySQL 을 직접 깔면 이미 점유돼 있는 경우가 많아 3307 로 띄운다.
+      # compose 는 이 파일이 있는 docker/ 를 기준으로 .env 를 찾으므로 루트 .env 는 읽지 않는다.
+      # 다른 포트가 필요하면 셸에서 MYSQL_HOST_PORT=3308 을 export 하고 앱에도 DB_PORT 를 맞춘다.
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: passmate
+      MYSQL_DATABASE: passmate
+      MYSQL_USER: passmate
+      MYSQL_PASSWORD: passmate
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    volumes:
+      - passmate-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-ppassmate"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  passmate-mysql-data:
