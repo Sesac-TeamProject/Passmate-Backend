@@ -72,8 +72,11 @@ passmate:
     bucket: ${S3_BUCKET}
     region: ${AWS_REGION:ap-northeast-2}
   ai:
-    model: ${LLM_MODEL:claude-opus-5}
-    api-key: ${ANTHROPIC_API_KEY:}
+    # 제공자는 OpenAI (2026-08-31 결정). 모델은 env 로만 주입하고 코드에 박지 않는다
+    provider: openai
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    api-key: ${OPENAI_API_KEY:}
+    model: ${LLM_MODEL:}
     timeout-seconds: 30
     max-concurrent-analysis: 4
   portone:

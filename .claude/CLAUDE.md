@@ -13,12 +13,21 @@ Spring Boot 3.5 · Kotlin 2.2 · JVM 17 · MySQL 8.0 · S3 · 포트원(PortOne)
 3. **사용자 작업이 끝난 것을 확인한 뒤에 다음 작업을 제안한다** — 확인은 말이 아니라 실제 호출·조회로 검증한다
 4. 사용자 작업이 남아 있으면 **다음 작업으로 넘어가지 않고 멈춘다**. 막히지 않은 다른 일을 먼저 하는 게 나아 보이면, 그걸 제안하되 **결정은 사용자가 한다**
 
+### ⛔ 유료 외부 API 는 허가 없이 호출하지 않는다
+
+`OPENAI_API_KEY` 는 **호출할 때마다 과금**된다. 다음을 지킨다.
+
+1. **어떤 형태의 호출도 사용자 허가 없이 하지 않는다** — 동작 확인·스모크 테스트·디버깅·재현 시도 전부 포함
+2. 자동화 테스트는 **Fake 구현으로만** 한다. `./gradlew test` 가 실제 OpenAI 를 부르는 일이 있어서는 안 된다
+3. 연동 확인이 필요하면 **먼저 물어보고**, 승인받은 범위(횟수·모델)만 호출한 뒤 무엇을 몇 번 불렀는지 보고한다
+4. 같은 원칙을 과금되는 다른 외부 API(포트원 결제·S3·FCM)에도 적용한다
+
 ### 사용자 작업 현황
 
 | 기능 | 사용자가 할 일 | 받는 값 → 넣을 곳 | 상태 |
 |---|---|---|---|
 | Google 로그인 | Google Cloud → OAuth 동의 화면 + 클라이언트 ID(웹·Android·iOS) | 웹 클라이언트 ID → `GOOGLE_CLIENT_ID` | 🟨 웹 클라이언트 ID 설정 완료 · **실제 로그인 확인은 연동 시점**(그때까지 `dev-login` 유지) |
-| AI 문제 생성 | Anthropic 콘솔에서 API 키 발급 | `ANTHROPIC_API_KEY` | ⬜ 대기 |
+| AI 문제 생성 | OpenAI 콘솔에서 API 키 발급 (2026-08-31 OpenAI 로 결정) | `OPENAI_API_KEY` | ✅ 설정 완료 — **호출은 허가 후에만** |
 | 코인 충전·결제 | 포트원 가입 → 테스트 채널 · 웹훅 등록 | `PORTONE_STORE_ID` · `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` | ⬜ 대기 |
 | 파일 업로드 | S3 버킷 생성 + IAM 사용자·정책 | `S3_BUCKET` · `AWS_REGION` · 자격증명 | ⬜ 대기 |
 | 푸시 알림 | Firebase 프로젝트 + 서비스 계정 키 | FCM 자격증명 | ⬜ 대기 |
@@ -58,8 +67,8 @@ kr/passmate/
 ### 계층 규칙
 
 - **Controller** — `@Valid` 검증, `@CurrentUser` 주체 해석, Service 호출, DTO 응답. 비즈니스 로직·엔티티 반환·`@Transactional`·try/catch 금지
-- **Service** — 유스케이스 1개 = 메서드 1개, `@Transactional` 경계. 조회 전용은 `XxxQueryService`(`readOnly = true`). **외부 API 호출(포트원·Anthropic)은 트랜잭션 밖**에서 하고 결과만 반영
-- **Client** — 외부 시스템(Anthropic · PortOne · Google · FCM · S3)은 인터페이스 + 구현. 실패는 `BusinessException`으로 번역. Service가 SDK·HTTP를 직접 다루지 않는다
+- **Service** — 유스케이스 1개 = 메서드 1개, `@Transactional` 경계. 조회 전용은 `XxxQueryService`(`readOnly = true`). **외부 API 호출(포트원·OpenAI)은 트랜잭션 밖**에서 하고 결과만 반영
+- **Client** — 외부 시스템(OpenAI · PortOne · Google · FCM · S3)은 인터페이스 + 구현. 실패는 `BusinessException`으로 번역. Service가 SDK·HTTP를 직접 다루지 않는다
 - **Repository** — 같은 기능 패키지의 Service에서만 주입. 복잡한 조회는 `XxxQueryRepository`(QueryDSL)
 - **Domain** — 엔티티는 `BaseTimeEntity` 상속, setter 없음. 상태 전이는 엔티티 메서드(`room.start()`, `charge.markPaid()`, `wallet.deduct()`)로 하고 검증도 그 안에서. 연관관계는 `@ManyToOne(fetch = LAZY)` 단방향 기본
 - **DTO** — `XxxRequest` / `XxxResponse` data class, `companion object { fun from(entity) }`. 검증 애노테이션은 Request에만
@@ -112,12 +121,13 @@ WebSocket/STOMP는 Redis와 무관하다(simple broker = 인메모리). 실시�
 
 - 문제 생성은 **동기**(30초 SLA), Structured Outputs 스키마 강제 → 형식 오류 1회 재시도 → 실패 502 `AI_GENERATION_FAILED`(무료 횟수 미차감)
 - 서술형 분석은 **`@Async` + 세마포어**. 세션 실시간 경로를 절대 막지 않는다. 상태 PENDING / DONE / FAILED / SKIPPED
-- 모델은 `LLM_MODEL` env(기본 `claude-opus-5`, 개발·부하 테스트는 `claude-haiku-4-5`)
+- **AI 제공자는 OpenAI**(2026-08-31 결정). 모델은 `LLM_MODEL` env 로 주입하고 코드에 박지 않는다. 개발·부하 테스트는 저렴한 모델로 내린다
+- Client 는 `OpenAiClient` 인터페이스 + 구현. 테스트는 **Fake 로만** 돌린다(위 ⛔ 규칙)
 - 사용자 입력(주제·강의자료)은 지시문과 분리된 컨텍스트 블록으로 주입한다(프롬프트 인젝션 완화)
 
 ## 테스트
 
-- 단위 = MockK, 통합 = Testcontainers(MySQL). 외부 Client는 Fake 구현으로 대체
+- 단위 = MockK, 통합 = Testcontainers(MySQL). 외부 Client는 Fake 구현으로 대체(유료 API 를 테스트에서 부르지 않는다)
 - 필수 케이스: 점수 공식 경계(만료 직전 · 오답 0점 · 서술형 보정) · 코인 원장 = 지갑 잔액 · 웹훅 멱등 · 환급/등급/게스트 파기 · 401·refresh·게스트 토큰 스코프
 - 커밋 전 `./gradlew test` 통과 확인
 
@@ -176,3 +186,4 @@ sed -E 's/=.*/=***/' .env        # 키 이름만 확인
 11. 외부 설정이 남은 기능을 "완료"라고 보고하거나, 사용자 작업 확인 전에 다음 작업을 제안하기
 12. `.env` 등 시크릿이 있을 수 있는 파일의 값을 출력하기 (존재 여부만 확인, 부득이하면 전량 마스킹)
 13. 사용자 확인 없이 `push` · PR 생성 · 머지 진행하기 (커밋까지만 하고 물어본다)
+14. **허가 없이 유료 외부 API(OpenAI 등) 호출하기** — 확인용 한 번도 안 된다
