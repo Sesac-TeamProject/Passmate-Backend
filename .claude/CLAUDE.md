@@ -61,7 +61,7 @@ kr/passmate/
 
 ## ⚠️ Redis는 후순위 — 지금은 쓰지 않는다
 
-MVP 1차에서는 **Redis를 도입하지 않는다.** `docker-compose.local.yml`에도 MySQL만 올린다.
+MVP 1차에서는 **Redis를 도입하지 않는다.** `docker/compose.local.yml`에도 MySQL만 올린다.
 아키텍처 문서의 Redis 설계는 2차 도입 시점의 목표이고, 지금은 아래 대체안으로 구현한다.
 
 | 원래 Redis 용도 | 지금 구현 | 나중 전환 |
@@ -100,12 +100,12 @@ WebSocket/STOMP는 Redis와 무관하다(simple broker = 인메모리). 실시�
 ## 로컬 실행
 
 ```bash
-docker compose -f docker-compose.local.yml up -d              # MySQL 8
+docker compose -f docker/compose.local.yml up -d    # MySQL 8
 ./gradlew bootRun --args='--spring.profiles.active=local'     # Flyway 적용 + 시드
 ```
 
 프로파일은 `local` / `prod` 두 개. 시드(`DevSeedRunner`)와 `POST /auth/dev-login`은 `@Profile("local","dev")` 한정.
-스키마가 꼬이면 `docker compose -f docker-compose.local.yml down -v` 후 재기동(V1부터 재적용).
+스키마가 꼬이면 `docker compose -f docker/compose.local.yml down -v` 후 재기동(V1부터 재적용).
 
 ## Git
 
@@ -113,8 +113,9 @@ docker compose -f docker-compose.local.yml up -d              # MySQL 8
 - `main`에 직접 커밋·push 금지. `develop` → `main`은 PR로만 병합하고, 그 병합이 배포 트리거다
 - **모든 작업은 `develop`에서 분기한다** — `feat/…` · `fix/…` 브랜치를 파서 작업하고 PR로 `develop`에 병합한다. 예외 없음
 - 커밋 메시지는 한국어, 형식 `feat: 방 생성 API 구현`
-- PR·이슈는 `.github/` 템플릿을 따른다
-- 레포에는 소스만 둔다. 빌드 산출물(`build/` `.gradle/` `.kotlin/`)·시크릿(`.env`)·개인 IDE 설정은 커밋하지 않는다 — 배포 이미지는 Dockerfile 이 소스에서 다시 빌드한다
+- PR·이슈는 `.github/` 템플릿을 따른다. CONTRIBUTING.md · CODEOWNERS 도 루트가 아니라 `.github/` 안에 둔다(깃허브가 거기서도 인식한다)
+- **루트는 비워 둔다** — 규칙은 `.claude/`, 도커 설정은 `docker/`, 깃허브 설정은 `.github/`, 문서는 `docs/`. 빌드 파일(`build.gradle.kts` · `gradlew`)과 `README.md` 처럼 루트에 있어야 동작하는 것만 남긴다
+- 레포에는 소스만 둔다. 빌드 산출물(`build/` `.gradle/` `.kotlin/`)·시크릿(`.env`)·개인 IDE 설정은 커밋하지 않는다 — 배포 이미지는 `docker/Dockerfile` 이 소스에서 다시 빌드한다
 
 ## 하지 말 것
 
