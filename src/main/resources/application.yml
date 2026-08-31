@@ -76,10 +76,13 @@ passmate:
     provider: openai
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
     api-key: ${OPENAI_API_KEY:}
-    # 문제 생성 — 동기 30초 SLA, Structured Outputs(json_schema strict)로 형식을 강제한다
-    generation-model: ${LLM_GENERATION_MODEL:gpt-5-mini}
+    # ⚠️ 지금 값은 "연동·출력 확인용 잠정값"이다. 운영 전에 다시 정한다.
+    # gpt-4(원조)·gpt-4-turbo 는 Structured Outputs(json_schema strict)를 지원하지 않아
+    # 우리가 실제로 쓸 경로를 검증하지 못한다. 4 계열 중에서는 gpt-4o-mini 부터 지원한다.
+    # 문제 생성 — 동기 30초 SLA, Structured Outputs 로 형식을 강제한다
+    generation-model: ${LLM_GENERATION_MODEL:gpt-4o-mini}
     # 서술형 분석 — 문항 × 참가자 수만큼 불리므로 가장 싼 축으로 둔다
-    analysis-model: ${LLM_ANALYSIS_MODEL:gpt-5-nano}
+    analysis-model: ${LLM_ANALYSIS_MODEL:gpt-4o-mini}
     # 추론 강도. 문제 생성은 30초 안에 끝나야 해서 낮게 둔다
     reasoning-effort: ${LLM_REASONING_EFFORT:low}
     timeout-seconds: 30
