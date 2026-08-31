@@ -59,6 +59,10 @@ dependencies {
     implementation(platform("software.amazon.awssdk:bom:2.54.7"))
     implementation("software.amazon.awssdk:s3")
 
+    // QR 코드 생성 (입장용) — 외부 서비스 없이 서버에서 만든다
+    implementation("com.google.zxing:core:3.5.4")
+    implementation("com.google.zxing:javase:3.5.4")
+
     // API 문서
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17")
 

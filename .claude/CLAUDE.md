@@ -17,7 +17,7 @@ Spring Boot 3.5 · Kotlin 2.2 · JVM 17 · MySQL 8.0 · S3 · 포트원(PortOne)
 
 | 기능 | 사용자가 할 일 | 받는 값 → 넣을 곳 | 상태 |
 |---|---|---|---|
-| Google 로그인 | Google Cloud → OAuth 동의 화면 + 클라이언트 ID(웹·Android·iOS) | 웹 클라이언트 ID → `GOOGLE_CLIENT_ID` | ⬜ 대기 |
+| Google 로그인 | Google Cloud → OAuth 동의 화면 + 클라이언트 ID(웹·Android·iOS) | 웹 클라이언트 ID → `GOOGLE_CLIENT_ID` | 🟨 웹 클라이언트 ID 설정 완료 · **실제 로그인 확인은 연동 시점**(그때까지 `dev-login` 유지) |
 | AI 문제 생성 | Anthropic 콘솔에서 API 키 발급 | `ANTHROPIC_API_KEY` | ⬜ 대기 |
 | 코인 충전·결제 | 포트원 가입 → 테스트 채널 · 웹훅 등록 | `PORTONE_STORE_ID` · `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` | ⬜ 대기 |
 | 파일 업로드 | S3 버킷 생성 + IAM 사용자·정책 | `S3_BUCKET` · `AWS_REGION` · 자격증명 | ⬜ 대기 |

@@ -33,7 +33,9 @@ server:
   servlet:
     encoding:
       charset: UTF-8
-      force: true
+      # 요청 디코딩만 강제한다. 응답까지 강제하면 PNG 같은 바이너리에도
+      # charset=UTF-8 이 붙어 Content-Type 이 틀어진다
+      force-request: true
 
 management:
   endpoints:
@@ -78,6 +80,8 @@ passmate:
     api-secret: ${PORTONE_API_SECRET:}
     store-id: ${PORTONE_STORE_ID:}
     webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
+  client:
+    base-url: ${WEB_BASE_URL:http://localhost:5173}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
     client-secret: ${GOOGLE_CLIENT_SECRET:}

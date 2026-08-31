@@ -27,7 +27,7 @@ class JwtAuthenticationFilter(
     ) {
         resolveToken(request)?.let { token ->
             try {
-                val principal = jwtTokenProvider.parseAccessToken(token)
+                val principal = jwtTokenProvider.parseAuthToken(token)
                 SecurityContextHolder.getContext().authentication =
                     UsernamePasswordAuthenticationToken(principal, null, principal.authorities())
             } catch (e: BusinessException) {
