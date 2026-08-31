@@ -111,7 +111,7 @@ docker compose -f docker-compose.local.yml up -d              # MySQL 8
 
 - 상시 브랜치는 **`main` · `develop`** 둘. `main`은 배포 가능한 상태만 담고, 개발은 전부 `develop`에서 한다 — **push도 `develop`으로** 한다
 - `main`에 직접 커밋·push 금지. `develop` → `main`은 PR로만 병합하고, 그 병합이 배포 트리거다
-- 기능 작업은 `develop`에서 분기해 `feat/…` · `fix/…`로 만들고 `develop`으로 되돌린다. 세팅·설정 변경처럼 작은 작업은 `develop`에 바로 커밋한다
+- **모든 작업은 `develop`에서 분기한다** — `feat/…` · `fix/…` 브랜치를 파서 작업하고 PR로 `develop`에 병합한다. 예외 없음
 - 커밋 메시지는 한국어, 형식 `feat: 방 생성 API 구현`
 - PR·이슈는 `.github/` 템플릿을 따른다
 - 레포에는 소스만 둔다. 빌드 산출물(`build/` `.gradle/` `.kotlin/`)·시크릿(`.env`)·개인 IDE 설정은 커밋하지 않는다 — 배포 이미지는 Dockerfile 이 소스에서 다시 빌드한다
