@@ -47,6 +47,9 @@ dependencies {
     kapt("jakarta.annotation:jakarta.annotation-api")
     kapt("jakarta.persistence:jakarta.persistence-api")
 
+    // Google ID 토큰 검증 — JWKS 캐싱·키 로테이션을 NimbusJwtDecoder 가 처리한다
+    implementation("org.springframework.security:spring-security-oauth2-jose")
+
     // JWT
     implementation("io.jsonwebtoken:jjwt-api:$jjwtVersion")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:$jjwtVersion")
