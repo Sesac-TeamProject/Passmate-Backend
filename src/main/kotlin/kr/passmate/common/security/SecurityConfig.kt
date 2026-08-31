@@ -42,6 +42,10 @@ class SecurityConfig(
             .authorizeHttpRequests {
                 it.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 it.requestMatchers(*PUBLIC_PATHS).permitAll()
+                // 게스트 입장 흐름 — 가입 없이 30초 안에 들어가는 것이 핵심 차별점이라 인증을 걸지 않는다
+                it.requestMatchers(HttpMethod.GET, "/rooms/pin/*").permitAll()
+                it.requestMatchers(HttpMethod.GET, "/rooms/*/participants/nickname-check").permitAll()
+                it.requestMatchers(HttpMethod.POST, "/rooms/*/participants").permitAll()
                 it.requestMatchers("/admin/**").hasRole("ADMIN")
                 it.anyRequest().authenticated()
             }
