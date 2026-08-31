@@ -131,6 +131,23 @@ docker compose -f docker/compose.local.yml up -d    # MySQL 8
 프로파일은 `local` / `prod` 두 개. 시드(`DevSeedRunner`)와 `POST /auth/dev-login`은 `@Profile("local","dev")` 한정.
 스키마가 꼬이면 `docker compose -f docker/compose.local.yml down -v` 후 재기동(V1부터 재적용).
 
+### 시크릿 취급
+
+`.env` 처럼 시크릿이 들어 있을 수 있는 파일은 **값을 출력하지 않는다.** 필요한 정보는 대개 "설정됐는가" 하나뿐이다.
+
+```bash
+grep -q '^GOOGLE_CLIENT_ID=..' .env && echo "설정됨" || echo "없음"   # 존재 여부만
+```
+
+부득이 여러 줄을 봐야 하면 **기본을 전량 마스킹**으로 두고 시작한다 — 특정 값 형태만 가리는 방식은
+형태가 다른 줄(예: `GOCSPX-…` 시크릿)이 그대로 새어 나간다.
+
+```bash
+sed -E 's/=.*/=***/' .env        # 키 이름만 확인
+```
+
+한 번 출력된 값은 대화·로그·세션 기록에 남아 되돌릴 수 없다. 노출됐다면 **해당 시크릿을 재발급**하고 알린다.
+
 ## Git
 
 - 상시 브랜치는 **`main` · `develop`** 둘. `main`은 배포 가능한 상태만 담고, 개발은 전부 `develop`에서 한다 — **push도 `develop`으로** 한다
@@ -154,3 +171,4 @@ docker compose -f docker/compose.local.yml up -d    # MySQL 8
 9. 이메일/비밀번호 인증 구현 (Google 로그인 단일, 해당 API 5건은 보류)
 10. `main`에 직접 커밋·push (작업과 push는 `develop`에서)
 11. 외부 설정이 남은 기능을 "완료"라고 보고하거나, 사용자 작업 확인 전에 다음 작업을 제안하기
+12. `.env` 등 시크릿이 있을 수 있는 파일의 값을 출력하기 (존재 여부만 확인, 부득이하면 전량 마스킹)
