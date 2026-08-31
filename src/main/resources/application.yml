@@ -76,7 +76,12 @@ passmate:
     provider: openai
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
     api-key: ${OPENAI_API_KEY:}
-    model: ${LLM_MODEL:}
+    # 문제 생성 — 동기 30초 SLA, Structured Outputs(json_schema strict)로 형식을 강제한다
+    generation-model: ${LLM_GENERATION_MODEL:gpt-5-mini}
+    # 서술형 분석 — 문항 × 참가자 수만큼 불리므로 가장 싼 축으로 둔다
+    analysis-model: ${LLM_ANALYSIS_MODEL:gpt-5-nano}
+    # 추론 강도. 문제 생성은 30초 안에 끝나야 해서 낮게 둔다
+    reasoning-effort: ${LLM_REASONING_EFFORT:low}
     timeout-seconds: 30
     max-concurrent-analysis: 4
   portone:

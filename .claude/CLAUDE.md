@@ -121,8 +121,10 @@ WebSocket/STOMP는 Redis와 무관하다(simple broker = 인메모리). 실시�
 
 - 문제 생성은 **동기**(30초 SLA), Structured Outputs 스키마 강제 → 형식 오류 1회 재시도 → 실패 502 `AI_GENERATION_FAILED`(무료 횟수 미차감)
 - 서술형 분석은 **`@Async` + 세마포어**. 세션 실시간 경로를 절대 막지 않는다. 상태 PENDING / DONE / FAILED / SKIPPED
-- **AI 제공자는 OpenAI**(2026-08-31 결정). 모델은 `LLM_MODEL` env 로 주입하고 코드에 박지 않는다. 개발·부하 테스트는 저렴한 모델로 내린다
+- **AI 제공자는 OpenAI**(2026-08-31 결정). 모델 이름을 코드에 박지 않고 `AiProperties`로 env 주입한다
+- 용도별로 모델이 다르다 — `generation-model`(문제 생성, 형식 정확도 중요) / `analysis-model`(서술형 분석, 문항 × 참가자 수만큼 호출되므로 단가 중요)
 - Client 는 `OpenAiClient` 인터페이스 + 구현. 테스트는 **Fake 로만** 돌린다(위 ⛔ 규칙)
+- `api-key`가 비어 있으면 AI 경로에서 502 로 명시적으로 막는다 — 조용히 실패하지 않는다
 - 사용자 입력(주제·강의자료)은 지시문과 분리된 컨텍스트 블록으로 주입한다(프롬프트 인젝션 완화)
 
 ## 테스트
