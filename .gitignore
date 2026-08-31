@@ -1,0 +1,65 @@
+# 커밋하지 않는 것 = 빌드 산출물 · 개인 도구 설정 · 시크릿 · OS 부산물
+# 배포 이미지는 Dockerfile 이 소스에서 다시 빌드하므로 산출물은 레포에 두지 않는다.
+
+### 빌드 산출물 ###
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+# Kotlin 2.x 세션 디렉터리
+.kotlin/
+out/
+bin/
+*.class
+*.war
+*.nar
+*.ear
+*.tar.gz
+*.rar
+
+### 시크릿 · 환경변수 ###
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.p12
+*.jks
+*.keystore
+*.key
+src/main/resources/application-secret.yml
+src/main/resources/application-local-*.yml
+
+### IDE · 에디터 (개인 설정) ###
+.idea/
+*.iml
+*.iws
+*.ipr
+.fleet/
+.vscode/
+*.swp
+*.swo
+*~
+
+### AI 에이전트 작업 디렉터리 ###
+.codex/
+.claude/settings.local.json
+
+### 로그 · 덤프 ###
+logs/
+*.log
+*.hprof
+hs_err_pid*
+replay_pid*
+.attach_pid*
+
+### OS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+desktop.ini
+
+### 기타 ###
+*.tmp
+*.bak

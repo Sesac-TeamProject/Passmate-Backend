@@ -1,0 +1,25 @@
+package kr.passmate.common.config
+
+import org.springframework.boot.context.properties.ConfigurationProperties
+
+/**
+ * 정책값은 전부 여기로 모은다. 서비스 코드에 숫자를 하드코딩하지 않는다.
+ * 값은 application.yml 의 passmate.policy.* → 운영은 환경변수로 덮어쓴다.
+ */
+@ConfigurationProperties(prefix = "passmate.policy")
+data class PolicyProperties(
+    /** 참가비 하한 (코인, 1 C = 1원) */
+    val entryFeeMin: Int,
+    /** 참가비 상한 */
+    val entryFeeMax: Int,
+    /** 최소 정산 신청 금액 (원) */
+    val settlementMinAmount: Int,
+    /** 월 AI 문제 세트 생성 무료 횟수 */
+    val aiFreeLimit: Int,
+    /** 세션 종료 후 별점·평가 가능 시간 */
+    val ratingWindowHours: Long,
+    /** 호스트 수익 배분율 (0.8 = 80:20) */
+    val hostEarningRate: Double,
+    /** 게스트 기록 보관 일수 (지나면 GuestPurgeJob 이 파기) */
+    val guestRetentionDays: Long,
+)

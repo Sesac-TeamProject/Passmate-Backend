@@ -1,0 +1,579 @@
+// PassMate ERD v2 — 2026-08-28 (피그마 v6 확정 화면 반영: 코인+포트원 결제, Google 단일 로그인, 차단·알림·화면 잠금)
+// dbdiagram.io 에 그대로 붙여넣기 (Import > DBML)
+// 기준: 기능 명세서 FR-001~060 · API 명세서 116행 · 피그마 UI 디자인 v6
+
+Project passmate {
+  database_type: 'MySQL'
+  Note: 'Spring Boot 3 + Kotlin + JPA · MySQL 8.0 · Redis(실시간 상태) · 단일 회원(Google 로그인) · 방=세션 1회 · 유료 방 참가비는 코인(1 C = ₩1), 충전은 포트원'
+}
+
+//////////////////// ① 회원·참가자 ////////////////////
+
+Table user {
+  id bigint [pk, increment]
+  provider varchar(20) [not null, note: 'GOOGLE — 회원가입·로그인은 Google 단일(2026-08-28 결정), APPLE은 앱 심사 요건 시 추가']
+  provider_id varchar(100) [not null]
+  email varchar(255)
+  nickname varchar(30) [not null]
+  profile_image_url varchar(500)
+  default_avatar_id varchar(30) [note: '기본 캐릭터 — 방 입장 시 participant.avatar_id 기본값']
+  is_admin boolean [not null, default: false]
+  status varchar(20) [not null, note: 'ACTIVE / SUSPENDED / DELETED']
+  last_login_at datetime
+  deleted_at datetime [note: 'soft delete']
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (provider, provider_id) [unique]
+    email
+  }
+  Note: '소셜 계정 단일 회원. 역할 컬럼 없음(방 소유자/참가자 관계로 판단)'
+}
+
+Table participant {
+  id bigint [pk, increment]
+  room_id bigint [not null, ref: > room.id]
+  user_id bigint [ref: > user.id, note: 'NULL = 게스트']
+  guest_token varchar(64) [unique, note: '게스트 참가자 토큰']
+  device_key varchar(64) [note: '게스트 제재(입장 제한) 판별']
+  nickname varchar(30) [not null]
+  avatar_id varchar(30) [not null]
+  status varchar(20) [not null, note: 'JOINED / LEFT / KICKED']
+  joined_at datetime [not null]
+  left_at datetime
+  total_score int [not null, default: 0]
+  final_rank int
+  claimed_at datetime [note: '게스트 기록 계정 연동 시각']
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (room_id, nickname) [unique]
+    user_id
+    (room_id, status)
+  }
+}
+
+Table user_block {
+  id bigint [pk, increment]
+  blocker_user_id bigint [not null, ref: > user.id]
+  blocked_user_id bigint [not null, ref: > user.id]
+  created_at datetime [not null]
+  indexes {
+    (blocker_user_id, blocked_user_id) [unique]
+  }
+  Note: '차단한 호스트의 방은 인기·탐색·공개 목록에서 제외, 프로필 시트 접근 제한 (M-10)'
+}
+
+Table notification_setting {
+  id bigint [pk, increment]
+  user_id bigint [not null, unique, ref: - user.id]
+  session_start boolean [not null, default: true]
+  rating_request boolean [not null, default: true]
+  settlement_done boolean [not null, default: true]
+  created_at datetime [not null]
+  updated_at datetime
+  Note: '마이페이지 알림 설정 (C-02 v3 · M-12)'
+}
+
+Table device_token {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > user.id]
+  platform varchar(10) [not null, note: 'ANDROID / IOS / WEB']
+  token varchar(255) [not null, unique]
+  last_seen_at datetime
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    user_id
+  }
+  Note: '푸시 토큰(FCM/APNs). 로그아웃 시 삭제'
+}
+
+//////////////////// ② 문제 세트·문항 ////////////////////
+
+Table question_set {
+  id bigint [pk, increment]
+  owner_user_id bigint [not null, ref: > user.id]
+  title varchar(100) [not null]
+  description varchar(500)
+  status varchar(20) [not null, note: 'DRAFT / CONFIRMED (확정 후 불변)']
+  source varchar(20) [note: 'AI / MANUAL / MIXED']
+  question_count int [not null, default: 0]
+  total_points int [not null, default: 0]
+  estimated_seconds int
+  usage_count int [not null, default: 0]
+  last_used_at datetime
+  confirmed_at datetime
+  duplicated_from_id bigint [ref: > question_set.id]
+  deleted_at datetime [note: 'soft delete']
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (owner_user_id, status, deleted_at)
+  }
+}
+
+Table question {
+  id bigint [pk, increment]
+  set_id bigint [not null, ref: > question_set.id]
+  order_no int [not null]
+  type varchar(10) [not null, note: 'MCQ / OX / ESSAY']
+  content text [not null]
+  choices json [note: 'MCQ 보기 배열 {key, text}']
+  answer varchar(500) [note: 'MCQ key / O·X / ESSAY 모범답안']
+  explanation text
+  topic varchar(100) [note: '취약 주제 집계 키']
+  difficulty varchar(10) [note: 'EASY / MEDIUM / HARD']
+  time_limit_sec int [not null]
+  points int [not null]
+  source varchar(10) [not null, note: 'AI / MANUAL']
+  is_active boolean [not null, default: true, note: '관리자 반려 시 false']
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (set_id, order_no) [unique]
+    topic
+  }
+}
+
+Table ai_generation_log {
+  id bigint [pk, increment]
+  set_id bigint [not null, ref: > question_set.id]
+  user_id bigint [not null, ref: > user.id]
+  kind varchar(20) [not null, note: 'SET / REGENERATE / FILE']
+  params json
+  status varchar(20) [not null, note: 'SUCCESS / FAILED']
+  retry_count int [not null, default: 0]
+  error_message varchar(500)
+  model varchar(50)
+  duration_ms int
+  created_at datetime [not null]
+}
+
+//////////////////// ③ 방·세션 ////////////////////
+
+Table room {
+  id bigint [pk, increment]
+  host_user_id bigint [not null, ref: > user.id]
+  question_set_id bigint [ref: > question_set.id, note: '확정 세트만, 연결 전 NULL']
+  title varchar(100) [not null]
+  description varchar(500)
+  topic varchar(50) [note: '주제 태그 — 백엔드 / CS 면접 / 네트워크 … (홈·탐색 카드)']
+  pin char(6) [not null, note: '활성 방 간에만 유일(Redis SETNX), 종료 후 재사용']
+  status varchar(20) [not null, note: 'WAITING / RUNNING / ENDED / CANCELED']
+  type varchar(20) [not null, note: 'FREE / PAID / BRANDED']
+  fee int [note: '참가비(코인, 1 C = ₩1). PAID만']
+  max_participants int [note: '최대 인원, NULL = 제한 없음']
+  is_public boolean [not null, default: false]
+  scheduled_at datetime
+  started_at datetime
+  ended_at datetime [note: '게스트 7일 파기 기준']
+  current_question_no int [not null, default: 0]
+  screen_locked boolean [not null, default: false, note: '학생 화면 잠금(M-T2), Redis state와 동기화']
+  participant_count int [not null, default: 0]
+  avg_score decimal(7,2)
+  correct_rate decimal(5,2)
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (pin, status)
+    (host_user_id, status)
+    (status, is_public, scheduled_at)
+    ended_at
+  }
+  Note: '방 = 세션 1회. 호스트가 직접 종료하기 전까지 RUNNING 유지'
+}
+
+Table session_question {
+  id bigint [pk, increment]
+  room_id bigint [not null, ref: > room.id]
+  question_id bigint [not null, ref: > question.id]
+  order_no int [not null]
+  time_limit_sec int [not null]
+  started_at datetime
+  ends_at datetime
+  ended_at datetime
+  submit_count int [not null, default: 0]
+  correct_count int [not null, default: 0]
+  correct_rate decimal(5,2)
+  answer_distribution json [note: '보기별 응답 인원']
+  created_at datetime [not null]
+  indexes {
+    (room_id, order_no) [unique]
+    question_id
+  }
+}
+
+Table voice_hint {
+  id bigint [pk, increment]
+  room_id bigint [not null, ref: > room.id]
+  session_question_id bigint [not null, ref: > session_question.id]
+  audio_url varchar(500) [not null]
+  duration_ms int
+  published_at datetime [not null]
+  created_at datetime [not null]
+}
+
+//////////////////// ④ 답안·채점·피드백·리포트 ////////////////////
+
+Table answer {
+  id bigint [pk, increment]
+  participant_id bigint [not null, ref: > participant.id]
+  session_question_id bigint [not null, ref: > session_question.id]
+  submitted text [not null, note: 'MCQ key / O·X / ESSAY 본문']
+  is_correct boolean [note: 'ESSAY는 NULL']
+  remaining_ratio decimal(5,4)
+  base_score int [not null, default: 0]
+  speed_bonus int [not null, default: 0]
+  score int [not null, default: 0, note: 'base + bonus (ESSAY는 잠정 배점)']
+  final_score int [not null, default: 0, note: '첨삭 반영']
+  submitted_at datetime [not null]
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (participant_id, session_question_id) [unique]
+    session_question_id
+  }
+}
+
+Table ai_feedback {
+  id bigint [pk, increment]
+  answer_id bigint [not null, unique, ref: - answer.id]
+  status varchar(20) [not null, note: 'PENDING / DONE / FAILED']
+  key_points json
+  missing_points json
+  suggestions json
+  summary text
+  model varchar(50)
+  latency_ms int
+  error_message varchar(500)
+  completed_at datetime
+  created_at datetime [not null]
+  updated_at datetime
+}
+
+Table teacher_review {
+  id bigint [pk, increment]
+  answer_id bigint [not null, unique, ref: - answer.id]
+  reviewer_user_id bigint [not null, ref: > user.id]
+  comment text
+  adjusted_score int
+  improvement text
+  reviewed_at datetime [not null]
+  created_at datetime [not null]
+  updated_at datetime
+}
+
+Table participant_report {
+  id bigint [pk, increment]
+  participant_id bigint [not null, unique, ref: - participant.id]
+  total_questions int [not null]
+  correct_count int [not null]
+  accuracy decimal(5,2) [not null]
+  total_score int [not null]
+  final_rank int [not null]
+  weak_topics json
+  generated_at datetime [not null]
+  created_at datetime [not null]
+}
+
+//////////////////// ⑤ 평가·등급·뱃지 ////////////////////
+
+Table room_rating {
+  id bigint [pk, increment]
+  room_id bigint [not null, ref: > room.id]
+  participant_id bigint [not null, ref: > participant.id]
+  host_user_id bigint [not null, ref: > user.id]
+  stars tinyint [not null, note: '1~5']
+  tags json [note: '다중 선택: 설명이 명확해요 / 난이도가 적당해요 / 시간 배분이 좋아요 / 힌트가 도움됐어요 / 문제 품질이 좋아요']
+  comment varchar(500) [note: '한 줄 후기 — 호스트에게만 공개']
+  created_at datetime [not null]
+  indexes {
+    (room_id, participant_id) [unique]
+    host_user_id
+  }
+  Note: '자격: 답안 1개 이상 제출한 참가자, 세션 종료 후 24시간 이내, 1회 (M-06 v2)'
+}
+
+Table host_profile {
+  id bigint [pk, increment]
+  user_id bigint [not null, unique, ref: - user.id]
+  level tinyint [not null, default: 1]
+  level_achieved_at datetime
+  rooms_hosted int [not null, default: 0]
+  sessions_completed int [not null, default: 0]
+  total_students int [not null, default: 0]
+  avg_rating decimal(3,2)
+  rating_count int [not null, default: 0]
+  active_last_30d int [not null, default: 0]
+  last_evaluated_at datetime
+  next_evaluation_at datetime
+  created_at datetime [not null]
+  updated_at datetime
+}
+
+Table level_history {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > user.id]
+  from_level tinyint
+  to_level tinyint [not null]
+  reason varchar(200)
+  evaluated_at datetime [not null]
+  created_at datetime [not null]
+}
+
+Table badge {
+  id bigint [pk, increment]
+  code varchar(50) [not null, unique]
+  name varchar(100) [not null]
+  description varchar(300)
+  condition_type varchar(30)
+  condition_value int
+  icon_url varchar(500)
+  created_at datetime [not null]
+}
+
+Table user_badge {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > user.id]
+  badge_id bigint [not null, ref: > badge.id]
+  progress int [not null, default: 0]
+  achieved_at datetime [note: 'NULL = 미획득']
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (user_id, badge_id) [unique]
+  }
+}
+
+//////////////////// ⑥ 코인·결제·정산 ////////////////////
+
+Table coin_wallet {
+  id bigint [pk, increment]
+  user_id bigint [not null, unique, ref: - user.id]
+  balance int [not null, default: 0, note: '보유 코인, 1 C = ₩1']
+  default_payment_method varchar(30) [note: 'KAKAOPAY / NAVERPAY / TOSSPAY / CARD / BANK_TRANSFER']
+  last_transaction_at datetime
+  created_at datetime [not null]
+  updated_at datetime
+  Note: '첫 로그인 시 생성. balance 변경은 항상 coin_transaction 기록과 같은 트랜잭션'
+}
+
+Table coin_charge {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > user.id]
+  room_id bigint [ref: > room.id, note: '충전 직후 참가비 차감할 방(선택) — "충전 → 차감하고 입장" 원스텝']
+  amount int [not null, note: '충전 코인 = 결제 원화']
+  method varchar(30) [note: 'KAKAOPAY / NAVERPAY / TOSSPAY / CARD / BANK_TRANSFER']
+  pg_provider varchar(20) [not null, default: 'PORTONE']
+  merchant_uid varchar(64) [not null, unique, note: '우리가 발급한 주문 ID(paymentId)']
+  pg_payment_id varchar(100) [unique, note: '포트원 결제 ID(imp_uid)']
+  pg_payload json [note: '승인·웹훅 응답 원문']
+  status varchar(20) [not null, note: 'READY / PAID / FAILED / CANCELED']
+  paid_at datetime
+  canceled_at datetime
+  cancel_reason varchar(200)
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (user_id, status)
+  }
+  Note: '포트원 충전 건. 승인 검증(confirm)과 웹훅 둘 다 status를 PAID로 올릴 수 있음 — 멱등'
+}
+
+Table entry_payment {
+  id bigint [pk, increment]
+  payment_no varchar(24) [not null, unique, note: 'PM-YYYY-MMDD-NNNN (영수증 번호)']
+  room_id bigint [not null, ref: > room.id]
+  user_id bigint [not null, ref: > user.id]
+  participant_id bigint [ref: > participant.id, note: '입장 완료 후 연결']
+  amount int [not null, note: '차감 코인']
+  status varchar(20) [not null, note: 'PAID / REFUNDED']
+  paid_at datetime [not null]
+  refunded_at datetime
+  refund_reason varchar(200) [note: '학생 취소 / 방 취소 / 호스트 사유 미진행 / 강퇴 / 관리자']
+  refunded_by_user_id bigint [ref: > user.id, note: '관리자 환불 시']
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (room_id, user_id)
+    (user_id, status)
+  }
+  Note: '참가비 코인 차감 건. 세션 시작 전 취소는 코인 100% 환급(REFUNDED)'
+}
+
+Table coin_transaction {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > user.id]
+  type varchar(20) [not null, note: 'CHARGE / ENTRY / REFUND / ADMIN_ADJUST']
+  amount int [not null, note: '부호 있음: +충전·환급, -차감']
+  balance_after int [not null]
+  ref_type varchar(20) [note: 'COIN_CHARGE / ENTRY_PAYMENT']
+  ref_id bigint
+  memo varchar(200)
+  created_at datetime [not null]
+  indexes {
+    (user_id, created_at)
+    (ref_type, ref_id)
+  }
+  Note: '코인 원장(append-only). 마이페이지 코인 내역·잔액 검증의 단일 소스'
+}
+
+Table settlement {
+  id bigint [pk, increment]
+  host_user_id bigint [not null, ref: > user.id]
+  period varchar(7) [not null, note: 'YYYY-MM']
+  amount int [not null]
+  status varchar(20) [not null, note: 'PENDING / COMPLETED / HELD']
+  scheduled_at date
+  paid_at datetime
+  memo varchar(500)
+  processed_by_user_id bigint [ref: > user.id]
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (host_user_id, period) [unique]
+  }
+}
+
+Table host_earning {
+  id bigint [pk, increment]
+  room_id bigint [not null, unique, ref: - room.id]
+  host_user_id bigint [not null, ref: > user.id]
+  participant_count int [not null]
+  gross int [not null]
+  platform_fee int [not null, note: '20%']
+  net int [not null, note: '80%']
+  status varchar(20) [not null, note: 'PENDING / SETTLED / HELD / CARRIED']
+  settlement_id bigint [ref: > settlement.id]
+  earned_at datetime [not null]
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (host_user_id, status)
+  }
+}
+
+Table settlement_account {
+  id bigint [pk, increment]
+  user_id bigint [not null, unique, ref: - user.id]
+  bank_code varchar(10) [not null]
+  bank_name varchar(50) [not null]
+  account_no_enc varchar(255) [not null, note: 'AES 암호화']
+  holder_name varchar(50) [not null]
+  verified_at datetime
+  created_at datetime [not null]
+  updated_at datetime
+}
+
+//////////////////// ⑦ 신고·제재 / 광고·브랜디드 / 관리 ////////////////////
+
+Table sanction {
+  id bigint [pk, increment]
+  user_id bigint [ref: > user.id]
+  guest_key varchar(64)
+  type varchar(20) [not null, note: 'SUSPEND / WARN / JOIN_BAN / PUBLISH_BAN']
+  reason varchar(500) [not null]
+  starts_at datetime
+  ends_at datetime
+  status varchar(20) [not null, note: 'ACTIVE / RELEASED / EXPIRED']
+  issued_by_user_id bigint [not null, ref: > user.id]
+  released_at datetime
+  release_reason varchar(200)
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (user_id, status)
+    (guest_key, status)
+  }
+}
+
+Table report {
+  id bigint [pk, increment]
+  reporter_user_id bigint [ref: > user.id]
+  reporter_participant_id bigint [ref: > participant.id]
+  target_type varchar(20) [not null, note: 'USER / PARTICIPANT / QUESTION / ROOM']
+  target_id bigint [not null, note: '다형 참조, FK 없음']
+  type varchar(30) [not null, note: 'NICKNAME / QUESTION_ERROR / PAID_ROOM / HOST_CONDUCT / SPAM / DIFFICULTY']
+  reason varchar(500) [not null]
+  status varchar(20) [not null, note: 'OPEN / REVIEWING / RESOLVED']
+  handled_by_user_id bigint [ref: > user.id]
+  handled_at datetime
+  resolution_memo varchar(500)
+  sanction_id bigint [ref: > sanction.id]
+  created_at datetime [not null]
+  updated_at datetime
+  indexes {
+    (status, created_at)
+    (target_type, target_id)
+  }
+}
+
+Table question_review {
+  id bigint [pk, increment]
+  question_id bigint [not null, ref: > question.id]
+  trigger_type varchar(20) [not null, note: 'REPORT / LOW_ACCURACY / HIGH_ACCURACY']
+  status varchar(20) [not null, note: 'PENDING / APPROVED / REJECTED']
+  decision_memo varchar(500)
+  reviewed_by_user_id bigint [ref: > user.id]
+  reviewed_at datetime
+  created_at datetime [not null]
+  updated_at datetime
+}
+
+Table ad_campaign {
+  id bigint [pk, increment]
+  name varchar(100) [not null]
+  advertiser varchar(100) [not null]
+  placement varchar(30) [not null, note: 'RESULT_BOTTOM / WAITING_ROOM_BANNER / REPORT_BOTTOM / HOME_CARD']
+  creative_url varchar(500) [not null]
+  link_url varchar(500) [not null]
+  starts_at date [not null]
+  ends_at date [not null]
+  status varchar(20) [not null, note: 'PENDING_REVIEW / ACTIVE / ENDED']
+  contract_amount int
+  impressions int [not null, default: 0]
+  clicks int [not null, default: 0]
+  created_at datetime [not null]
+  updated_at datetime
+}
+
+Table ad_event {
+  id bigint [pk, increment]
+  campaign_id bigint [not null, ref: > ad_campaign.id]
+  type varchar(20) [not null, note: 'IMPRESSION / CLICK']
+  user_id bigint [ref: > user.id]
+  participant_id bigint [ref: > participant.id]
+  occurred_at datetime [not null]
+  created_at datetime [not null]
+}
+
+Table branded_quiz {
+  id bigint [pk, increment]
+  room_id bigint [not null, unique, ref: - room.id]
+  company varchar(100) [not null]
+  purpose varchar(20) [note: 'RECRUIT / BRAND / EDUCATION']
+  contract_amount int
+  exposure_start date
+  exposure_end date
+  delegated_host_user_id bigint [ref: > user.id]
+  status varchar(20) [not null, note: 'PRODUCING / RUNNING / ENDED']
+  participant_count int [not null, default: 0]
+  completion_rate decimal(5,2)
+  created_at datetime [not null]
+  updated_at datetime
+}
+
+Table admin_activity_log {
+  id bigint [pk, increment]
+  type varchar(30) [not null]
+  actor_user_id bigint [ref: > user.id]
+  ref_type varchar(30)
+  ref_id bigint
+  summary varchar(200) [not null]
+  occurred_at datetime [not null]
+  created_at datetime [not null]
+  indexes {
+    occurred_at
+  }
+}

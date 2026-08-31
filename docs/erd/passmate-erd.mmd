@@ -1,0 +1,361 @@
+erDiagram
+    user {
+        bigint id PK
+        varchar provider "GOOGLE"
+        varchar provider_id
+        varchar nickname
+        varchar default_avatar_id
+        boolean is_admin
+        varchar status
+    }
+    participant {
+        bigint id PK
+        bigint room_id FK
+        bigint user_id FK "NULL=guest"
+        varchar guest_token
+        varchar nickname
+        varchar avatar_id
+        varchar status "JOINED/LEFT/KICKED"
+        int total_score
+        int final_rank
+        datetime claimed_at
+    }
+    question_set {
+        bigint id PK
+        bigint owner_user_id FK
+        varchar title
+        varchar status "DRAFT/CONFIRMED"
+        int usage_count
+        bigint duplicated_from_id FK
+        datetime confirmed_at
+        datetime deleted_at
+    }
+    question {
+        bigint id PK
+        bigint set_id FK
+        int order_no
+        varchar type "MCQ/OX/ESSAY"
+        text content
+        json choices
+        varchar answer
+        varchar topic
+        int time_limit_sec
+        int points
+        varchar source "AI/MANUAL"
+        boolean is_active
+    }
+    ai_generation_log {
+        bigint id PK
+        bigint set_id FK
+        bigint user_id FK
+        varchar kind
+        json params
+        varchar status
+        int retry_count
+    }
+    room {
+        bigint id PK
+        bigint host_user_id FK
+        bigint question_set_id FK
+        varchar title
+        varchar topic
+        char pin
+        varchar status "WAITING/RUNNING/ENDED/CANCELED"
+        varchar type "FREE/PAID/BRANDED"
+        int fee "coins"
+        int max_participants
+        boolean is_public
+        datetime scheduled_at
+        datetime started_at
+        datetime ended_at
+        int current_question_no
+        boolean screen_locked
+    }
+    session_question {
+        bigint id PK
+        bigint room_id FK
+        bigint question_id FK
+        int order_no
+        int time_limit_sec
+        datetime started_at
+        datetime ends_at
+        datetime ended_at
+        decimal correct_rate
+        json answer_distribution
+    }
+    voice_hint {
+        bigint id PK
+        bigint room_id FK
+        bigint session_question_id FK
+        varchar audio_url
+        int duration_ms
+    }
+    answer {
+        bigint id PK
+        bigint participant_id FK
+        bigint session_question_id FK
+        text submitted
+        boolean is_correct
+        int base_score
+        int speed_bonus
+        int score
+        int final_score
+        datetime submitted_at
+    }
+    ai_feedback {
+        bigint id PK
+        bigint answer_id FK
+        varchar status "PENDING/DONE/FAILED"
+        json key_points
+        json missing_points
+        json suggestions
+    }
+    teacher_review {
+        bigint id PK
+        bigint answer_id FK
+        bigint reviewer_user_id FK
+        text comment
+        int adjusted_score
+        text improvement
+    }
+    participant_report {
+        bigint id PK
+        bigint participant_id FK
+        int correct_count
+        decimal accuracy
+        json weak_topics
+        int final_rank
+    }
+    room_rating {
+        bigint id PK
+        bigint room_id FK
+        bigint participant_id FK
+        bigint host_user_id FK
+        tinyint stars
+        json tags
+        varchar comment "host only"
+    }
+    host_profile {
+        bigint id PK
+        bigint user_id FK
+        tinyint level
+        int rooms_hosted
+        int total_students
+        decimal avg_rating
+        int rating_count
+        datetime next_evaluation_at
+    }
+    level_history {
+        bigint id PK
+        bigint user_id FK
+        tinyint from_level
+        tinyint to_level
+        varchar reason
+    }
+    badge {
+        bigint id PK
+        varchar code
+        varchar name
+        varchar condition_type
+        int condition_value
+    }
+    user_badge {
+        bigint id PK
+        bigint user_id FK
+        bigint badge_id FK
+        int progress
+        datetime achieved_at
+    }
+    coin_wallet {
+        bigint id PK
+        bigint user_id FK
+        int balance "1C=1KRW"
+        varchar default_payment_method
+        datetime last_transaction_at
+    }
+    coin_charge {
+        bigint id PK
+        bigint user_id FK
+        bigint room_id FK "NULL or room to enter"
+        int amount
+        varchar method
+        varchar pg_provider "PORTONE"
+        varchar pg_payment_id
+        varchar merchant_uid
+        varchar status "READY/PAID/FAILED/CANCELED"
+        datetime paid_at
+        datetime canceled_at
+    }
+    entry_payment {
+        bigint id PK
+        varchar payment_no "PM-YYYY-MMDD-NNNN"
+        bigint room_id FK
+        bigint user_id FK
+        bigint participant_id FK
+        int amount "coins"
+        varchar status "PAID/REFUNDED"
+        datetime paid_at
+        datetime refunded_at
+        varchar refund_reason
+        bigint refunded_by_user_id FK
+    }
+    coin_transaction {
+        bigint id PK
+        bigint user_id FK
+        varchar type "CHARGE/ENTRY/REFUND/ADMIN"
+        int amount "signed"
+        int balance_after
+        varchar ref_type
+        bigint ref_id
+    }
+    host_earning {
+        bigint id PK
+        bigint room_id FK
+        bigint host_user_id FK
+        int gross
+        int platform_fee
+        int net
+        varchar status "PENDING/SETTLED/HELD/CARRIED"
+        bigint settlement_id FK
+    }
+    settlement {
+        bigint id PK
+        bigint host_user_id FK
+        varchar period
+        int amount
+        varchar status
+        datetime paid_at
+    }
+    settlement_account {
+        bigint id PK
+        bigint user_id FK
+        varchar bank_name
+        varchar account_no_enc
+        varchar holder_name
+    }
+    notification_setting {
+        bigint id PK
+        bigint user_id FK
+        boolean session_start
+        boolean rating_request
+        boolean settlement_done
+    }
+    device_token {
+        bigint id PK
+        bigint user_id FK
+        varchar platform "ANDROID/IOS/WEB"
+        varchar token
+        datetime last_seen_at
+    }
+    user_block {
+        bigint id PK
+        bigint blocker_user_id FK
+        bigint blocked_user_id FK
+    }
+    report {
+        bigint id PK
+        bigint reporter_user_id FK
+        bigint reporter_participant_id FK
+        varchar target_type
+        bigint target_id
+        varchar type
+        varchar status
+        bigint sanction_id FK
+    }
+    sanction {
+        bigint id PK
+        bigint user_id FK
+        varchar guest_key
+        varchar type
+        datetime starts_at
+        datetime ends_at
+        varchar status
+        bigint issued_by_user_id FK
+    }
+    question_review {
+        bigint id PK
+        bigint question_id FK
+        varchar trigger_type
+        varchar status
+        bigint reviewed_by_user_id FK
+    }
+    ad_campaign {
+        bigint id PK
+        varchar name
+        varchar advertiser
+        varchar placement
+        date starts_at
+        date ends_at
+        varchar status
+        int impressions
+        int clicks
+    }
+    ad_event {
+        bigint id PK
+        bigint campaign_id FK
+        varchar type
+        bigint participant_id FK
+        datetime occurred_at
+    }
+    branded_quiz {
+        bigint id PK
+        bigint room_id FK
+        varchar company
+        varchar purpose
+        int contract_amount
+        bigint delegated_host_user_id FK
+        varchar status
+    }
+    admin_activity_log {
+        bigint id PK
+        varchar type
+        bigint actor_user_id FK
+        varchar ref_type
+        bigint ref_id
+        varchar summary
+    }
+
+    user ||--o{ participant : "joins"
+    user ||--o{ room : "hosts"
+    user ||--o{ question_set : "owns"
+    user ||--o| host_profile : ""
+    user ||--o{ level_history : ""
+    user ||--o{ user_badge : ""
+    badge ||--o{ user_badge : ""
+    user ||--o| settlement_account : ""
+    user ||--o| coin_wallet : ""
+    user ||--o{ coin_charge : ""
+    user ||--o{ entry_payment : ""
+    user ||--o{ coin_transaction : ""
+    user ||--o| notification_setting : ""
+    user ||--o{ device_token : ""
+    user ||--o{ user_block : "blocker"
+    user ||--o{ host_earning : "host"
+    user ||--o{ settlement : "host"
+    user ||--o{ sanction : ""
+    user ||--o{ report : "reporter"
+    question_set ||--o{ question : ""
+    question_set ||--o{ ai_generation_log : ""
+    question_set ||--o{ room : "linked"
+    question_set |o--o{ question_set : "duplicated"
+    question ||--o{ session_question : ""
+    question ||--o{ question_review : ""
+    room ||--o{ participant : ""
+    room ||--o{ session_question : ""
+    room ||--o{ voice_hint : ""
+    session_question ||--o{ voice_hint : ""
+    room ||--o{ room_rating : ""
+    room ||--o{ entry_payment : ""
+    room |o--o{ coin_charge : "charge then enter"
+    room ||--o| host_earning : ""
+    room ||--o| branded_quiz : ""
+    participant ||--o{ answer : ""
+    session_question ||--o{ answer : ""
+    answer ||--o| ai_feedback : ""
+    answer ||--o| teacher_review : ""
+    participant ||--o| participant_report : ""
+    participant ||--o| room_rating : ""
+    participant |o--o| entry_payment : ""
+    settlement ||--o{ host_earning : ""
+    report |o--o| sanction : ""
+    ad_campaign ||--o{ ad_event : ""
