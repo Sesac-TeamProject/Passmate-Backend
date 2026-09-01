@@ -3,18 +3,23 @@ package kr.passmate.room.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import kr.passmate.common.dto.PageResponse
 import kr.passmate.common.security.CurrentUser
 import kr.passmate.common.security.UserPrincipal
+import kr.passmate.room.dto.PublicRoomResponse
+import kr.passmate.room.dto.PublicRoomSearchRequest
 import kr.passmate.room.dto.RoomCreateRequest
 import kr.passmate.room.dto.RoomResponse
 import kr.passmate.room.dto.RoomSummaryResponse
 import kr.passmate.room.dto.RoomUpdateRequest
+import kr.passmate.room.service.PublicRoomQueryService
 import kr.passmate.room.service.RoomQueryService
 import kr.passmate.room.service.RoomService
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.ModelAttribute
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
@@ -29,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController
 class RoomController(
     private val roomService: RoomService,
     private val roomQueryService: RoomQueryService,
+    private val publicRoomQueryService: PublicRoomQueryService,
 ) {
 
     @Operation(summary = "방 생성", description = "PIN 을 발급한다. 문제 세트는 나중에 연결해도 된다.")
@@ -38,6 +44,17 @@ class RoomController(
         @CurrentUser principal: UserPrincipal,
         @Valid @RequestBody request: RoomCreateRequest,
     ): RoomResponse = RoomResponse.from(roomService.create(principal.userId, request))
+
+    @Operation(
+        summary = "공개 방 목록·검색 조회",
+        description = "홈 인기 방 캐러셀과 탐색 화면. 호스트가 공개한 방과 브랜디드 방을 보여준다. " +
+            "게스트도 조회할 수 있어 PIN 은 포함하지 않는다. 종료된 방은 나오지 않는다.",
+    )
+    @GetMapping("/public")
+    fun publicRooms(
+        @Valid @ModelAttribute request: PublicRoomSearchRequest,
+    ): PageResponse<PublicRoomResponse> =
+        PageResponse.from(publicRoomQueryService.search(request)) { it }
 
     @Operation(summary = "방 상세 조회")
     @GetMapping("/{roomId}")

@@ -41,6 +41,12 @@ class QuestionSetQueryService(
         return set to questionRepository.findAllBySetIdOrderByOrderNoAsc(setId)
     }
 
+    /** 세트별 문항 수. 공개 방 카드에 "문항 수"를 채울 때 쓴다 — 세트 내용은 주지 않는다. */
+    fun getQuestionCounts(setIds: Collection<Long>): Map<Long, Int> {
+        if (setIds.isEmpty()) return emptyMap()
+        return questionSetRepository.findAllById(setIds.toSet()).associate { it.id to it.questionCount }
+    }
+
     fun getOwnedSet(setId: Long, ownerUserId: Long): QuestionSet {
         val set = questionSetRepository.findByIdAndDeletedAtIsNull(setId)
             ?: throw BusinessException(ErrorCode.QUESTION_SET_NOT_FOUND)
