@@ -43,9 +43,12 @@ Spring Boot 3.5 · Kotlin 2.2 · JVM 17 · MySQL 8.0 · S3 · 포트원(PortOne)
 
 | 문서 | 위치 |
 |---|---|
-| 기능 명세서 v2 (US1~20, FR-001~074) | `docs/spec/feature-spec-v2.md` |
-| ERD v2 (34 테이블) | `docs/erd/passmate.dbml`, `docs/erd/passmate-mysql.sql` |
-| API 명세서 v2 (117행), 백엔드 아키텍처 설계 | 노션 — 개인 워크스페이스 "PassMate 문서 (개인 사본)" |
+| 기능 명세서 v2 (US1~20, FR-001~075) | **노션이 원본.** 레포의 `docs/spec/`은 추적하지 않는다 |
+| API 명세서 v2, 백엔드 아키텍처 설계, 실시간 세션(WebSocket) | 노션 — 개인 워크스페이스 "PassMate 문서 (개인 사본)" |
+| ERD v2 (34 테이블) | `docs/erd/passmate.dbml`, `docs/erd/passmate-mysql.sql` — **빌드 입력이라 레포에 둔다** |
+
+`docs/spec/`에 로컬 사본이 있어도 **노션보다 오래됐을 수 있다.** 요구사항이 판단을 가르는 자리에서는 노션에서 확인한다.
+`docs/erd/`는 다르다 — Flyway 의 근거이자 `ddl-auto: validate` 의 기준이라 코드와 같은 커밋으로 함께 바꾼다.
 
 ## 아키텍처
 
