@@ -1,0 +1,17 @@
+# 배포용(운영) 이미지 — CI 가 이미 만든 jar 를 담기만 한다.
+#   docker build -f docker/Dockerfile.runtime --platform linux/arm64 -t passmate .
+#
+# 왜 나눴나: 배포 대상이 arm64(t4g)라 이미지도 arm64 여야 하는데,
+# QEMU 로 에뮬레이션하며 Gradle 을 돌리면 빌드가 몇 배 느려진다.
+# jar 는 플랫폼 독립이라 러너에서 네이티브로 만들고, 여기서는 COPY 만 한다.
+# 소스부터 통째로 굽는 이미지는 docker/Dockerfile (로컬 검증용).
+FROM amazoncorretto:17-alpine
+WORKDIR /app
+RUN addgroup -S app && adduser -S app -G app
+# bootJar 만 남기도록 build.gradle.kts 에서 plain jar 를 껐다
+COPY build/libs/app.jar app.jar
+USER app
+EXPOSE 8080
+# t4g.small(2GB) 에 MySQL 컨테이너가 함께 산다 — 힙 상한을 고정해 OOM 을 막는다
+ENV JAVA_OPTS="-Xmx640m -XX:+UseSerialGC -Duser.timezone=UTC"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

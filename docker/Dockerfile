@@ -13,9 +13,9 @@ RUN ./gradlew bootJar --no-daemon -x test
 FROM amazoncorretto:17-alpine
 WORKDIR /app
 RUN addgroup -S app && adduser -S app -G app
-COPY --from=builder /workspace/build/libs/*.jar app.jar
+COPY --from=builder /workspace/build/libs/app.jar app.jar
 USER app
 EXPOSE 8080
-# EC2 t3.micro(1 GB) — 힙 상한 고정, 스왑 2 GB 필수
-ENV JAVA_OPTS="-Xmx512m -XX:+UseSerialGC -Duser.timezone=UTC"
+# 로컬 검증용. 운영 힙 설정은 docker/Dockerfile.runtime 을 따른다
+ENV JAVA_OPTS="-Xmx640m -XX:+UseSerialGC -Duser.timezone=UTC"
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

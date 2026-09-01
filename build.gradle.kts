@@ -16,6 +16,10 @@ java {
     }
 }
 
+// bootJar 만 남긴다. 기본값이면 `-plain.jar` 가 함께 생겨
+// Dockerfile 의 `COPY build/libs/*.jar` 가 어느 쪽을 담을지 모호해진다
+tasks.jar { enabled = false }
+
 repositories {
     mavenCentral()
 }
