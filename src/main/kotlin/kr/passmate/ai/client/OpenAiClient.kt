@@ -8,6 +8,12 @@ package kr.passmate.ai.client
  */
 interface OpenAiClient {
 
+    /**
+     * 호출할 준비가 됐는지(키 설정 여부). 코인을 차감하기 **전에** 물어보는 자리다 —
+     * 설정이 안 된 걸 뒤늦게 알면 차감했다가 환급하는 헛일이 생긴다.
+     */
+    val isConfigured: Boolean
+
     /** 조건에 맞는 문항을 생성한다. */
     fun generateQuestions(request: AiGenerationRequest): AiGenerationResult
 

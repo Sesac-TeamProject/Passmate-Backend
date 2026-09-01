@@ -17,6 +17,9 @@ import kr.passmate.question.domain.QuestionType
  */
 class FakeOpenAiClient : OpenAiClient {
 
+    /** Fake 는 네트워크를 타지 않으므로 기본은 "준비됨". 미설정 경로를 볼 때만 끈다 */
+    override var isConfigured: Boolean = true
+
     /** 지금까지 호출된 횟수. 재시도가 실제로 한 번만 도는지 세는 데 쓴다 */
     var callCount: Int = 0
         private set
@@ -64,6 +67,7 @@ class FakeOpenAiClient : OpenAiClient {
         lastAnalysisRequest = null
         analysisFailuresLeft = 0
         analysisFailureRetryable = true
+        isConfigured = true
     }
 
     override fun analyzeEssay(request: EssayAnalysisRequest): EssayAnalysisResult {

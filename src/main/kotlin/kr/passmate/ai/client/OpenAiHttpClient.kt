@@ -45,6 +45,8 @@ class OpenAiHttpClient(
         )
         .build()
 
+    override val isConfigured: Boolean get() = properties.isConfigured
+
     override fun generateQuestions(request: AiGenerationRequest): AiGenerationResult {
         // 키가 없으면 조용히 실패하지 않는다 — 여기서 502 로 분명히 막는다
         requireConfigured(ErrorCode.AI_GENERATION_FAILED)
@@ -101,7 +103,7 @@ class OpenAiHttpClient(
     }
 
     private fun requireConfigured(errorCode: ErrorCode) {
-        if (!properties.isConfigured) {
+        if (!isConfigured) {
             throw BusinessException(errorCode, "OpenAI API 키가 설정되지 않았습니다.")
         }
     }

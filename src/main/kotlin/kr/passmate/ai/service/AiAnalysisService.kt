@@ -28,8 +28,8 @@ class AiAnalysisService(
 
     private val semaphore = Semaphore(properties.maxConcurrentAnalysis)
 
-    /** 키가 설정돼 있는지. 코인을 차감하기 **전에** 물어보는 자리다. */
-    val isConfigured: Boolean get() = properties.isConfigured
+    /** 호출할 준비가 됐는지. 코인을 차감하기 **전에** 물어보는 자리다. */
+    val isConfigured: Boolean get() = openAiClient.isConfigured
 
     /**
      * 분석 1건. 형식 오류처럼 다시 걸어볼 만한 실패는 **한 번만** 재시도한다.

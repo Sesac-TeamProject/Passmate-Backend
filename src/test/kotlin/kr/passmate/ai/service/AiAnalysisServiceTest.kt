@@ -55,9 +55,11 @@ class AiAnalysisServiceTest {
     }
 
     @Test
-    fun `키가 비어 있으면 설정되지 않았다고 알린다`() {
-        assertThat(AiAnalysisService(client, properties(apiKey = "")).isConfigured).isFalse()
+    fun `호출 준비 여부는 클라이언트에게 묻는다`() {
         assertThat(service.isConfigured).isTrue()
+
+        client.isConfigured = false
+        assertThat(service.isConfigured).isFalse()
     }
 
     private fun properties(apiKey: String = "test-key") = AiProperties(
