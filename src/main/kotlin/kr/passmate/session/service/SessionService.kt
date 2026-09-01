@@ -1,5 +1,6 @@
 package kr.passmate.session.service
 
+import kr.passmate.common.event.SessionEndedEvent
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.question.domain.Question
@@ -14,6 +15,7 @@ import kr.passmate.session.dto.QuestionStartedPayload
 import kr.passmate.session.dto.ScreenLockPayload
 import kr.passmate.session.repository.RoomStateRepository
 import kr.passmate.session.repository.SessionQuestionRepository
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -30,6 +32,7 @@ class SessionService(
     private val roomStateRepository: RoomStateRepository,
     private val sessionQueryService: SessionQueryService,
     private val eventPublisher: SessionEventPublisher,
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
 
     /**
@@ -99,6 +102,9 @@ class SessionService(
 
         room.close()
         eventPublisher.toRoom(roomId, SessionEventType.SESSION_ENDED, sessionQueryService.ranking(roomId))
+
+        // 개인 학습 리포트는 report 기능이 만든다. 직접 부르면 session ⇄ report 순환이라 이벤트로 끊는다
+        applicationEventPublisher.publishEvent(SessionEndedEvent(roomId))
     }
 
     /**
