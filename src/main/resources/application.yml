@@ -95,6 +95,11 @@ passmate:
     webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
   client:
     base-url: ${WEB_BASE_URL:http://localhost:5173}
+  cors:
+    # 브라우저(웹)만 해당된다 — 네이티브 앱은 CORS 대상이 아니다.
+    # 기본값은 웹 배포 주소(WEB_BASE_URL) 하나. 도메인이 바뀌면 SSM 값만 갈아끼우면 되고
+    # 코드 수정·재빌드가 필요 없다. 출처를 더 열어야 하면 CORS_ALLOWED_ORIGINS 로 덮어쓴다(쉼표 구분)
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:${WEB_BASE_URL:http://localhost:5173}}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
     client-secret: ${GOOGLE_CLIENT_SECRET:}
