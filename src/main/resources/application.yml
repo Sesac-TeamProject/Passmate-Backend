@@ -60,7 +60,7 @@ passmate:
     entry-fee-min: 100                 # 참가비 하한 (코인, 1 C = 1원)
     entry-fee-max: 10000               # 참가비 상한
     settlement-min-amount: 10000       # 최소 정산액 (원)
-    ai-free-limit: 3                   # 월 AI 세트 생성 무료 횟수 (호스트)
+    ai-free-limit: 5                   # AI 문항 생성 무료 횟수 (호스트, 누적 — 명세 "최초 5회 무료")
     essay-analysis-free-limit: 5       # 월 서술형 AI 분석 무료 횟수 (학생, FR-075)
     essay-analysis-coin-cost: 100      # 무료 한도 초과 시 분석 1건당 차감 코인 (1 C = 1원)
     rating-window-hours: 24            # 종료 후 평가 가능 시간
@@ -86,7 +86,7 @@ passmate:
     # 서술형 분석 — 문항 × 참가자 수만큼 불리므로 가장 싼 축으로 둔다
     analysis-model: ${LLM_ANALYSIS_MODEL:gpt-4o-mini}
     # 추론 강도. 문제 생성은 30초 안에 끝나야 해서 낮게 둔다
-    reasoning-effort: ${LLM_REASONING_EFFORT:low}
+    reasoning-effort: ${LLM_REASONING_EFFORT:}   # 추론 모델(gpt-5 계열)에서만 유효 — 비우면 파라미터를 보내지 않는다
     timeout-seconds: 30
     max-concurrent-analysis: 4
   portone:
