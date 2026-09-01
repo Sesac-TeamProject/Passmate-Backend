@@ -5,7 +5,9 @@ import kr.passmate.common.exception.ErrorCode
 import kr.passmate.common.security.AuthPrincipal
 import kr.passmate.common.security.GuestPrincipal
 import kr.passmate.common.security.UserPrincipal
+import kr.passmate.question.domain.Question
 import kr.passmate.question.service.QuestionSetQueryService
+import kr.passmate.room.domain.Room
 import kr.passmate.room.service.ParticipantQueryService
 import kr.passmate.room.service.RoomQueryService
 import kr.passmate.session.domain.SessionQuestion
@@ -82,6 +84,15 @@ class SessionQueryService(
             ?: throw BusinessException(ErrorCode.QUESTION_NOT_FOUND, "이 방에서 출제된 문항이 아닙니다.")
 
     /**
+     * 방에 출제된 문항의 원본. **정답·해설이 들어 있다** — 언제 내보낼지는 호출자가 판단한다.
+     * 세트는 호스트 소유라 세션 문맥에서만 호스트 자격으로 꺼낸다.
+     */
+    fun findQuestion(room: Room, questionId: Long): Question? =
+        room.questionSetId
+            ?.let { setId -> questionSetQueryService.getDetail(setId, room.hostUserId).second }
+            ?.firstOrNull { it.id == questionId }
+
+    /**
      * 재접속 복구용 스냅샷. 끊겼다 돌아온 참가자는 이걸 받아 현재 화면을 그대로 복원한다.
      * 진행 중 문항의 **정답은 포함하지 않는다** — QUESTION_STARTED 와 같은 원칙이다.
      */
@@ -91,10 +102,7 @@ class SessionQueryService(
         val current = all.firstOrNull { it.isRunning }
 
         val payload = current?.let { sq ->
-            val question = room.questionSetId
-                ?.let { setId -> questionSetQueryService.getDetail(setId, room.hostUserId).second }
-                ?.firstOrNull { it.id == sq.questionId }
-            question?.let {
+            findQuestion(room, sq.questionId)?.let {
                 QuestionStartedPayload(
                     sessionQuestionId = sq.id,
                     questionId = it.id,
@@ -133,9 +141,7 @@ class SessionQueryService(
         val sq = findSessionQuestion(roomId, questionId)
         if (!sq.isEnded) throw BusinessException(ErrorCode.QUESTION_NOT_RUNNING, "아직 마감되지 않은 문항입니다.")
 
-        val question = room.questionSetId
-            ?.let { questionSetQueryService.getDetail(it, room.hostUserId).second }
-            ?.firstOrNull { it.id == questionId }
+        val question = findQuestion(room, questionId)
 
         return QuestionResultResponse(
             sessionQuestionId = sq.id,
