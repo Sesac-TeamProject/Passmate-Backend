@@ -47,7 +47,7 @@ class AnswerQueryService(
         answerRepository.findById(answerId).orElseThrow { BusinessException(ErrorCode.NOT_FOUND, "답안을 찾을 수 없습니다.") }
 
     /** 회원은 계정으로, 게스트는 토큰에 담긴 참가자 id 로 자기 자신을 찾는다. */
-    private fun resolveParticipantId(roomId: Long, principal: AuthPrincipal): Long = when (principal) {
+    fun resolveParticipantId(roomId: Long, principal: AuthPrincipal): Long = when (principal) {
         is UserPrincipal -> participantQueryService.listJoined(roomId)
             .firstOrNull { it.userId == principal.userId }?.id
             ?: throw BusinessException(ErrorCode.PARTICIPANT_NOT_FOUND, "이 방에 참여한 기록이 없습니다.")
