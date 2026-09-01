@@ -1,6 +1,6 @@
 package kr.passmate.ai
 
-import kr.passmate.ai.client.AiGenerationException
+import kr.passmate.ai.client.AiCallException
 import kr.passmate.ai.client.GeneratedQuestion
 import kr.passmate.question.domain.Difficulty
 import kr.passmate.question.domain.QuestionType
@@ -20,20 +20,20 @@ class GeneratedQuestionTest {
         val question = mcq(choices = listOf("가", "나"), answer = "다")
 
         assertThatThrownBy { question.verifyConsistent() }
-            .isInstanceOf(AiGenerationException::class.java)
-            .satisfies({ assertThat((it as AiGenerationException).retryable).isTrue() })
+            .isInstanceOf(AiCallException::class.java)
+            .satisfies({ assertThat((it as AiCallException).retryable).isTrue() })
     }
 
     @Test
     fun `객관식 보기가 하나뿐이면 거부한다`() {
         assertThatThrownBy { mcq(choices = listOf("가"), answer = "가").verifyConsistent() }
-            .isInstanceOf(AiGenerationException::class.java)
+            .isInstanceOf(AiCallException::class.java)
     }
 
     @Test
     fun `OX 정답은 O 나 X 여야 한다`() {
         assertThatThrownBy { ox("참").verifyConsistent() }
-            .isInstanceOf(AiGenerationException::class.java)
+            .isInstanceOf(AiCallException::class.java)
         assertThatCode { ox("O").verifyConsistent() }.doesNotThrowAnyException()
         assertThatCode { ox("X").verifyConsistent() }.doesNotThrowAnyException()
     }
@@ -50,13 +50,13 @@ class GeneratedQuestionTest {
         )
 
         assertThatThrownBy { essay.verifyConsistent() }
-            .isInstanceOf(AiGenerationException::class.java)
+            .isInstanceOf(AiCallException::class.java)
     }
 
     @Test
     fun `지문이 비면 거부한다`() {
         assertThatThrownBy { ox("O", content = " ").verifyConsistent() }
-            .isInstanceOf(AiGenerationException::class.java)
+            .isInstanceOf(AiCallException::class.java)
     }
 
     @Test

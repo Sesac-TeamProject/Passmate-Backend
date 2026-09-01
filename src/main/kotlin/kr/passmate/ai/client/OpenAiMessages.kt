@@ -49,3 +49,12 @@ data class GeneratedPayload(
         )
     }
 }
+
+/** 서술형 분석 결과 JSON. ANALYSIS_SCHEMA 와 1:1 로 맞춘다. */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EssayAnalysisPayload(
+    val keyPoints: List<String> = emptyList(),
+    val missingPoints: List<String> = emptyList(),
+    val suggestions: List<String> = emptyList(),
+    val summary: String = "",
+)

@@ -42,26 +42,26 @@ data class GeneratedQuestion(
      * 사용자에게는 "내 입력이 잘못됐다"로 보인다 — 실제로는 AI 가 틀린 것이다.
      */
     fun verifyConsistent() {
-        if (content.isBlank()) throw AiGenerationException("문항 지문이 비어 있습니다.", retryable = true)
+        if (content.isBlank()) throw AiCallException("문항 지문이 비어 있습니다.", retryable = true)
         when (type) {
             QuestionType.MCQ -> {
                 val options = choices.orEmpty()
                 if (options.size < MIN_CHOICES) {
-                    throw AiGenerationException("객관식 보기가 ${MIN_CHOICES}개 미만입니다.", retryable = true)
+                    throw AiCallException("객관식 보기가 ${MIN_CHOICES}개 미만입니다.", retryable = true)
                 }
                 if (answer !in options) {
-                    throw AiGenerationException("객관식 정답이 보기 안에 없습니다.", retryable = true)
+                    throw AiCallException("객관식 정답이 보기 안에 없습니다.", retryable = true)
                 }
             }
 
             QuestionType.OX ->
                 if (answer !in OX_ANSWERS) {
-                    throw AiGenerationException("OX 정답이 O/X 가 아닙니다.", retryable = true)
+                    throw AiCallException("OX 정답이 O/X 가 아닙니다.", retryable = true)
                 }
 
             QuestionType.ESSAY ->
                 if (answer.isBlank()) {
-                    throw AiGenerationException("서술형 모범답안이 비어 있습니다.", retryable = true)
+                    throw AiCallException("서술형 모범답안이 비어 있습니다.", retryable = true)
                 }
         }
     }
@@ -78,16 +78,3 @@ data class AiGenerationResult(
     val model: String,
     val durationMs: Int,
 )
-
-/**
- * AI 호출 실패. Service 가 이걸 잡아 [retryable] 일 때만 **1회 재시도**하고,
- * 그래도 실패하면 502 로 번역한다.
- *
- * 인증 실패(401)·잘못된 요청(400)처럼 다시 걸어도 결과가 같은 실패는 재시도하지 않는다 —
- * 실패한 호출도 요청 자체는 나가므로 무의미한 재시도를 만들지 않는다.
- */
-class AiGenerationException(
-    message: String,
-    val retryable: Boolean,
-    cause: Throwable? = null,
-) : RuntimeException(message, cause)
