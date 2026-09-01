@@ -239,7 +239,9 @@ Table answer {
 Table ai_feedback {
   id bigint [pk, increment]
   answer_id bigint [not null, unique, ref: - answer.id]
+  user_id bigint [not null, ref: > user.id, note: '분석을 요청·결제한 회원. answer→participant 로 따라갈 수 있지만 월 무료 한도 집계를 위해 비정규화']
   status varchar(20) [not null, note: 'PENDING / DONE / FAILED']
+  charged_coins int [not null, default: 0, note: '차감한 코인. 0 = 월 무료 한도 사용분']
   key_points json
   missing_points json
   suggestions json
@@ -405,10 +407,10 @@ Table entry_payment {
 Table coin_transaction {
   id bigint [pk, increment]
   user_id bigint [not null, ref: > user.id]
-  type varchar(20) [not null, note: 'CHARGE / ENTRY / REFUND / ADMIN_ADJUST']
+  type varchar(20) [not null, note: 'CHARGE / ENTRY / REFUND / AI_ANALYSIS / ADMIN_ADJUST']
   amount int [not null, note: '부호 있음: +충전·환급, -차감']
   balance_after int [not null]
-  ref_type varchar(20) [note: 'COIN_CHARGE / ENTRY_PAYMENT']
+  ref_type varchar(20) [note: 'COIN_CHARGE / ENTRY_PAYMENT / AI_FEEDBACK']
   ref_id bigint
   memo varchar(200)
   created_at datetime [not null]

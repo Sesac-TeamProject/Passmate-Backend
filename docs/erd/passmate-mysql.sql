@@ -242,7 +242,9 @@ CREATE TABLE answer (
 CREATE TABLE ai_feedback (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   answer_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL COMMENT '분석을 요청·결제한 회원. 월 무료 한도 집계를 위해 비정규화',
   status VARCHAR(20) NOT NULL COMMENT 'PENDING/DONE/FAILED',
+  charged_coins INT NOT NULL DEFAULT 0 COMMENT '차감한 코인. 0 = 월 무료 한도 사용분',
   key_points JSON NULL,
   missing_points JSON NULL,
   suggestions JSON NULL,
@@ -254,7 +256,9 @@ CREATE TABLE ai_feedback (
   created_at DATETIME(6) NOT NULL,
   updated_at DATETIME(6) NULL,
   UNIQUE KEY uk_ai_feedback_answer (answer_id),
-  CONSTRAINT fk_ai_feedback_answer FOREIGN KEY (answer_id) REFERENCES answer(id)
+  KEY idx_ai_feedback_user (user_id, created_at),
+  CONSTRAINT fk_ai_feedback_answer FOREIGN KEY (answer_id) REFERENCES answer(id),
+  CONSTRAINT fk_ai_feedback_user FOREIGN KEY (user_id) REFERENCES `user`(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE teacher_review (
@@ -460,10 +464,10 @@ CREATE TABLE entry_payment (
 CREATE TABLE coin_transaction (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT NOT NULL,
-  type VARCHAR(20) NOT NULL COMMENT 'CHARGE/ENTRY/REFUND/ADMIN_ADJUST',
+  type VARCHAR(20) NOT NULL COMMENT 'CHARGE/ENTRY/REFUND/AI_ANALYSIS/ADMIN_ADJUST',
   amount INT NOT NULL COMMENT '부호 있음: +충전·환급, -차감',
   balance_after INT NOT NULL,
-  ref_type VARCHAR(20) NULL COMMENT 'COIN_CHARGE/ENTRY_PAYMENT',
+  ref_type VARCHAR(20) NULL COMMENT 'COIN_CHARGE/ENTRY_PAYMENT/AI_FEEDBACK',
   ref_id BIGINT NULL,
   memo VARCHAR(200) NULL,
   created_at DATETIME(6) NOT NULL,

@@ -60,7 +60,9 @@ passmate:
     entry-fee-min: 100                 # 참가비 하한 (코인, 1 C = 1원)
     entry-fee-max: 10000               # 참가비 상한
     settlement-min-amount: 10000       # 최소 정산액 (원)
-    ai-free-limit: 3                   # 월 AI 세트 생성 무료 횟수
+    ai-free-limit: 3                   # 월 AI 세트 생성 무료 횟수 (호스트)
+    essay-analysis-free-limit: 5       # 월 서술형 AI 분석 무료 횟수 (학생, FR-075)
+    essay-analysis-coin-cost: 100      # 무료 한도 초과 시 분석 1건당 차감 코인 (1 C = 1원)
     rating-window-hours: 24            # 종료 후 평가 가능 시간
     host-earning-rate: 0.8             # 호스트 수익 배분율 (80:20)
     guest-retention-days: 7            # 게스트 기록 보관 일수

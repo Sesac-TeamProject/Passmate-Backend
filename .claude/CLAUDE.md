@@ -82,7 +82,7 @@ kr/passmate/
 - 오류는 `ErrorCode`(enum, status+code+message) → `BusinessException` → `GlobalExceptionHandler` → `{code, message}`. 내부 원인은 로그에만
 - **토큰 만료는 401**(`JwtAuthenticationEntryPoint`). 403으로 응답하면 클라이언트 refresh가 발화하지 않는다
 - 권한 게이트는 전부 서버에서: 호스트 검증 · Lv.3+ 유료 방(403 `HOST_LEVEL_REQUIRED`) · 코인 부족(402 `INSUFFICIENT_COINS`) · 제재 계정 거부 · ADMIN(`/admin/*`)
-- 정책값(참가비 범위 · 최소 정산액 · AI 무료 한도 · 평가 가능 24h)은 `PolicyProperties`로 env 바인딩. 하드코딩 금지
+- 정책값(참가비 범위 · 최소 정산액 · AI 무료 한도 · **서술형 분석 무료 한도·차감 코인** · 평가 가능 24h)은 `PolicyProperties`로 env 바인딩. 하드코딩 금지
 
 ## DB
 
@@ -120,7 +120,8 @@ WebSocket/STOMP는 Redis와 무관하다(simple broker = 인메모리). 실시�
 ## AI
 
 - 문제 생성은 **동기**(30초 SLA), Structured Outputs 스키마 강제 → 형식 오류 1회 재시도 → 실패 502 `AI_GENERATION_FAILED`(무료 횟수 미차감)
-- 서술형 분석은 **`@Async` + 세마포어**. 세션 실시간 경로를 절대 막지 않는다. 상태 PENDING / DONE / FAILED / SKIPPED
+- 서술형 분석은 **학생이 요청할 때만** 실행한다(자동 실행 아님, FR-075). **회원 전용 · 월 5회 무료**, 초과 시 본인 코인 차감(부족하면 402), 분석 실패 시 환급
+- 실행은 **`@Async` + 세마포어**. 세션 실시간 경로를 절대 막지 않는다. 상태 PENDING / DONE / FAILED
 - **AI 제공자는 OpenAI**(2026-08-31 결정). 모델 이름을 코드에 박지 않고 `AiProperties`로 env 주입한다
 - 용도별로 모델이 다르다 — `generation-model`(문제 생성, 형식 정확도 중요) / `analysis-model`(서술형 분석, 문항 × 참가자 수만큼 호출되므로 단가 중요)
 - Client 는 `OpenAiClient` 인터페이스 + 구현. 테스트는 **Fake 로만** 돌린다(위 ⛔ 규칙)
