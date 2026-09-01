@@ -31,6 +31,16 @@ class QuestionSetQueryService(
         return set to questionRepository.findAllBySetIdOrderByOrderNoAsc(setId)
     }
 
+    /**
+     * 수정 가능한 세트 + 문항. AI 생성처럼 **오래 걸리는 외부 호출 전에** 먼저 막으려고 쓴다.
+     * 저장 시점에도 같은 검사를 다시 한다(그 사이에 확정될 수 있다).
+     */
+    fun getEditableDetail(setId: Long, ownerUserId: Long): Pair<QuestionSet, List<Question>> {
+        val set = getOwnedSet(setId, ownerUserId)
+        set.verifyEditable()
+        return set to questionRepository.findAllBySetIdOrderByOrderNoAsc(setId)
+    }
+
     fun getOwnedSet(setId: Long, ownerUserId: Long): QuestionSet {
         val set = questionSetRepository.findByIdAndDeletedAtIsNull(setId)
             ?: throw BusinessException(ErrorCode.QUESTION_SET_NOT_FOUND)
