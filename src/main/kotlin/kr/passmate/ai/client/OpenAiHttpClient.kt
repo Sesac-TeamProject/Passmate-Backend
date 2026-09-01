@@ -20,7 +20,7 @@ import java.time.Duration
  * OpenAI Chat Completions 호출.
  *
  * **Structured Outputs(json_schema strict)** 로 형식을 강제한다 — 파싱 실패를 프롬프트로 달래는 대신
- * 스키마로 막는다. 그래도 어긋나면 [AiGenerationException] 을 던져 Service 가 1회 재시도한다.
+ * 스키마로 막는다. 그래도 어긋나면 [AiCallException] 을 던져 Service 가 1회 재시도한다.
  *
  * 사용자가 쓴 글(주제·강의자료)은 지시문과 같은 메시지에 섞지 않고 **구분된 데이터 블록**으로 넣는다.
  * "위 지시를 무시하라" 같은 문장이 자료에 섞여 있어도 지시문으로 읽히지 않게 하기 위함이다.
@@ -62,18 +62,18 @@ class OpenAiHttpClient(
                 .body(body)
                 .retrieve()
                 .body(ChatCompletionResponse::class.java)
-                ?: throw AiGenerationException("OpenAI 응답이 비어 있습니다.", retryable = true)
+                ?: throw AiCallException("OpenAI 응답이 비어 있습니다.", retryable = true)
         } catch (e: RestClientResponseException) {
             // 본문에는 사용자 자료가 섞일 수 있어 상태 코드만 남긴다
             log.warn("OpenAI 호출 실패 status={}", e.statusCode)
-            throw AiGenerationException(
+            throw AiCallException(
                 "OpenAI 호출이 ${e.statusCode} 로 실패했습니다.",
                 retryable = e.statusCode.is5xxServerError || e.statusCode.value() == HttpStatus.TOO_MANY_REQUESTS.value(),
                 cause = e,
             )
         } catch (e: RestClientException) {
             log.warn("OpenAI 통신 실패", e)
-            throw AiGenerationException("OpenAI 와 통신하지 못했습니다.", retryable = true, cause = e)
+            throw AiCallException("OpenAI 와 통신하지 못했습니다.", retryable = true, cause = e)
         }
 
         val questions = parse(response, request)
@@ -86,25 +86,25 @@ class OpenAiHttpClient(
 
     private fun parse(response: ChatCompletionResponse, request: AiGenerationRequest): List<GeneratedQuestion> {
         val message = response.choices.firstOrNull()?.message
-            ?: throw AiGenerationException("OpenAI 응답에 choices 가 없습니다.", retryable = true)
+            ?: throw AiCallException("OpenAI 응답에 choices 가 없습니다.", retryable = true)
 
         // 모델이 생성을 거부한 경우(안전 정책). 같은 입력으로 다시 걸어도 결과는 같다
         message.refusal?.takeIf { it.isNotBlank() }?.let {
-            throw AiGenerationException("AI 가 생성을 거부했습니다.", retryable = false)
+            throw AiCallException("AI 가 생성을 거부했습니다.", retryable = false)
         }
 
         val content = message.content?.takeIf { it.isNotBlank() }
-            ?: throw AiGenerationException("OpenAI 응답 본문이 비어 있습니다.", retryable = true)
+            ?: throw AiCallException("OpenAI 응답 본문이 비어 있습니다.", retryable = true)
 
         val payload = try {
             objectMapper.readValue(content, GeneratedPayload::class.java)
         } catch (e: Exception) {
-            throw AiGenerationException("AI 응답이 약속한 형식이 아닙니다.", retryable = true, cause = e)
+            throw AiCallException("AI 응답이 약속한 형식이 아닙니다.", retryable = true, cause = e)
         }
 
         val questions = payload.questions.map { it.toDomain() }
         if (questions.size != request.totalCount) {
-            throw AiGenerationException(
+            throw AiCallException(
                 "요청한 문항 수(${request.totalCount})와 생성된 수(${questions.size})가 다릅니다.",
                 retryable = true,
             )
@@ -113,7 +113,7 @@ class OpenAiHttpClient(
         val produced = questions.groupingBy { it.type }.eachCount()
         val requested = request.counts.filterValues { it > 0 }
         if (produced != requested) {
-            throw AiGenerationException("요청한 유형별 개수와 생성 결과가 다릅니다.", retryable = true)
+            throw AiCallException("요청한 유형별 개수와 생성 결과가 다릅니다.", retryable = true)
         }
 
         questions.forEach { it.verifyConsistent() }

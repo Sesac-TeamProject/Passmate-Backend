@@ -6,6 +6,6 @@ package kr.passmate.ai.client
  */
 interface OpenAiClient {
 
-    /** 조건에 맞는 문항을 생성한다. 형식·통신 오류는 [AiGenerationException] 으로 던진다. */
+    /** 조건에 맞는 문항을 생성한다. 형식·통신 오류는 [AiCallException] 으로 던진다. */
     fun generateQuestions(request: AiGenerationRequest): AiGenerationResult
 }

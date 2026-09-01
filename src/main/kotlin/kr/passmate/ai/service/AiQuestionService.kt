@@ -1,6 +1,6 @@
 package kr.passmate.ai.service
 
-import kr.passmate.ai.client.AiGenerationException
+import kr.passmate.ai.client.AiCallException
 import kr.passmate.ai.client.AiGenerationRequest
 import kr.passmate.ai.client.GeneratedQuestion
 import kr.passmate.ai.client.OpenAiClient
@@ -73,14 +73,14 @@ class AiQuestionService(
         kind: AiGenerationKind,
         request: AiGenerationRequest,
     ): List<GeneratedQuestion> {
-        var lastError: AiGenerationException? = null
+        var lastError: AiCallException? = null
 
         for (attempt in 0..MAX_RETRY) {
             try {
                 val result = openAiClient.generateQuestions(request)
                 save(userId, setId, kind, request, AiGenerationStatus.SUCCESS, attempt, null, result.model, result.durationMs)
                 return result.questions
-            } catch (e: AiGenerationException) {
+            } catch (e: AiCallException) {
                 lastError = e
                 log.warn("AI 생성 실패 setId={} kind={} attempt={} retryable={}", setId, kind, attempt, e.retryable)
                 if (!e.retryable) break

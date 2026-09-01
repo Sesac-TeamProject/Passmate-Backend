@@ -1,6 +1,6 @@
 package kr.passmate.support
 
-import kr.passmate.ai.client.AiGenerationException
+import kr.passmate.ai.client.AiCallException
 import kr.passmate.ai.client.AiGenerationRequest
 import kr.passmate.ai.client.AiGenerationResult
 import kr.passmate.ai.client.GeneratedQuestion
@@ -51,7 +51,7 @@ class FakeOpenAiClient : OpenAiClient {
 
         if (failuresLeft > 0) {
             failuresLeft--
-            throw AiGenerationException("테스트용 실패", retryable = failureRetryable)
+            throw AiCallException("테스트용 실패", retryable = failureRetryable)
         }
 
         return AiGenerationResult(
