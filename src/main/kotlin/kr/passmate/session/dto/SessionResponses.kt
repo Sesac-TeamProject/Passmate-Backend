@@ -62,3 +62,15 @@ data class AnswerSubmitRequest(
     @field:jakarta.validation.constraints.NotBlank(message = "답안은 비어 있을 수 없습니다.")
     val submitted: String,
 )
+
+@Schema(description = "학생 화면 잠금/해제 요청")
+data class ScreenLockRequest(
+    @field:Schema(description = "true 면 잠금, false 면 해제", requiredMode = Schema.RequiredMode.REQUIRED)
+    val locked: Boolean,
+)
+
+@Schema(description = "학생 화면 잠금 상태")
+data class ScreenLockResponse(
+    val roomId: Long,
+    val screenLocked: Boolean,
+)

@@ -21,6 +21,7 @@ import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.messaging.converter.MappingJackson2MessageConverter
 import org.springframework.messaging.simp.stomp.StompFrameHandler
 import org.springframework.messaging.simp.stomp.StompHeaders
+import org.springframework.messaging.simp.stomp.StompSession
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter
 import org.springframework.web.socket.WebSocketHttpHeaders
 import org.springframework.web.socket.client.standard.StandardWebSocketClient
@@ -69,28 +70,7 @@ class SessionBroadcastTest : IntegrationTestSupport() {
         roomService.update(room.id, hostId, RoomUpdateRequest(title = "방송", questionSetId = set.id))
 
         val received = LinkedBlockingQueue<Map<String, Any?>>()
-        val client = WebSocketStompClient(StandardWebSocketClient()).apply {
-            messageConverter = MappingJackson2MessageConverter()
-        }
-        val headers = StompHeaders().apply {
-            add("Authorization", "Bearer ${jwtTokenProvider.issue(hostId, false).accessToken}")
-        }
-        val session = client
-            .connectAsync("ws://localhost:$port/ws", WebSocketHttpHeaders(), headers, object : StompSessionHandlerAdapter() {})
-            .get(5, TimeUnit.SECONDS)
-
-        session.subscribe(
-            "/topic/rooms/${room.id}",
-            object : StompFrameHandler {
-                override fun getPayloadType(headers: StompHeaders): Type = Map::class.java
-
-                @Suppress("UNCHECKED_CAST")
-                override fun handleFrame(headers: StompHeaders, payload: Any?) {
-                    received.add(payload as Map<String, Any?>)
-                }
-            },
-        )
-        Thread.sleep(300)
+        val session = subscribeRoom(room.id, hostId, received)
 
         sessionService.start(room.id, hostId)
         val started = drainUntil(received, "QUESTION_STARTED")
@@ -113,6 +93,81 @@ class SessionBroadcastTest : IntegrationTestSupport() {
         assertThat(endPayload).containsKey("distribution")
 
         session.disconnect()
+    }
+
+    @Test
+    fun `화면을 잠그면 방 전체에 SCREEN_LOCKED 가 나간다`() {
+        val hostId = userService.loginOrRegister(
+            AuthProvider.GOOGLE, "bc-lock-${System.nanoTime()}", null, "호스트", null,
+        ).user.id
+
+        val set = questionSetService.create(hostId, QuestionSetCreateRequest("잠금 테스트"))
+        questionSetService.addQuestion(
+            set.id, hostId,
+            QuestionRequest(
+                type = QuestionType.MCQ,
+                content = "404 는?",
+                choices = listOf("성공", "찾을 수 없음"),
+                answer = "찾을 수 없음",
+                timeLimitSec = 30,
+                points = 100,
+            ),
+        )
+        questionSetService.confirm(set.id, hostId)
+
+        val room = roomService.create(hostId, RoomCreateRequest(title = "잠금", type = RoomType.FREE))
+        roomService.update(room.id, hostId, RoomUpdateRequest(title = "잠금", questionSetId = set.id))
+        sessionService.start(room.id, hostId)
+
+        val received = LinkedBlockingQueue<Map<String, Any?>>()
+        val session = subscribeRoom(room.id, hostId, received)
+
+        sessionService.lockScreen(room.id, hostId, true)
+        val locked = drainUntil(received, "SCREEN_LOCKED")
+
+        @Suppress("UNCHECKED_CAST")
+        val lockedPayload = locked["payload"] as Map<String, Any?>
+        assertThat(lockedPayload["locked"]).isEqualTo(true)
+
+        sessionService.lockScreen(room.id, hostId, false)
+
+        @Suppress("UNCHECKED_CAST")
+        val unlockedPayload = drainUntil(received, "SCREEN_LOCKED")["payload"] as Map<String, Any?>
+        assertThat(unlockedPayload["locked"]).isEqualTo(false)
+
+        session.disconnect()
+    }
+
+    /** 방 토픽을 구독하고 들어오는 이벤트를 [received] 에 쌓는다. */
+    private fun subscribeRoom(
+        roomId: Long,
+        userId: Long,
+        received: LinkedBlockingQueue<Map<String, Any?>>,
+    ): StompSession {
+        val client = WebSocketStompClient(StandardWebSocketClient()).apply {
+            messageConverter = MappingJackson2MessageConverter()
+        }
+        val headers = StompHeaders().apply {
+            add("Authorization", "Bearer ${jwtTokenProvider.issue(userId, false).accessToken}")
+        }
+        val session = client
+            .connectAsync("ws://localhost:$port/ws", WebSocketHttpHeaders(), headers, object : StompSessionHandlerAdapter() {})
+            .get(5, TimeUnit.SECONDS)
+
+        session.subscribe(
+            "/topic/rooms/$roomId",
+            object : StompFrameHandler {
+                override fun getPayloadType(headers: StompHeaders): Type = Map::class.java
+
+                @Suppress("UNCHECKED_CAST")
+                override fun handleFrame(headers: StompHeaders, payload: Any?) {
+                    received.add(payload as Map<String, Any?>)
+                }
+            },
+        )
+        // 구독이 브로커에 등록될 틈을 준다 — 바로 이벤트를 쏘면 놓친다
+        Thread.sleep(300)
+        return session
     }
 
     private fun drainUntil(queue: LinkedBlockingQueue<Map<String, Any?>>, type: String): Map<String, Any?> {

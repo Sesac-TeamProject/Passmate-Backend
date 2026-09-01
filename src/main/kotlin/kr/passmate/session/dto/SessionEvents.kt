@@ -71,3 +71,9 @@ data class SubmissionStatusPayload(
     val correctRate: Double,
     val distribution: Map<String, Int>,
 )
+
+@Schema(description = "학생 화면 잠금/해제")
+data class ScreenLockPayload(
+    @field:Schema(description = "true 면 답안 제출·보기 선택이 막힌다")
+    val locked: Boolean,
+)

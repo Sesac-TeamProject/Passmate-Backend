@@ -40,6 +40,8 @@ class AnswerService(
         val now = LocalDateTime.now()
         val room = roomQueryService.getRoom(roomId)
         room.verifyRunning()
+        // 잠금 판단은 서버가 한다 — 클라이언트가 SCREEN_LOCKED 를 무시해도 답안은 들어가지 않는다
+        if (room.screenLocked) throw BusinessException(ErrorCode.SCREEN_LOCKED)
 
         val sq = sessionQueryService.findSessionQuestion(roomId, questionId)
         if (!sq.isRunning || sq.isExpired(now)) {
