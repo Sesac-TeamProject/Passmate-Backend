@@ -8,10 +8,14 @@ import kr.passmate.common.security.UserPrincipal
 import kr.passmate.user.dto.MyProfileResponse
 import kr.passmate.user.dto.UserProfileUpdateRequest
 import kr.passmate.user.service.UserProfileService
+import kr.passmate.user.service.UserWithdrawService
+import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
 @Tag(name = "마이페이지")
@@ -19,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/users")
 class UserController(
     private val userProfileService: UserProfileService,
+    private val userWithdrawService: UserWithdrawService,
 ) {
 
     @Operation(
@@ -39,4 +44,13 @@ class UserController(
         @CurrentUser principal: UserPrincipal,
         @Valid @RequestBody request: UserProfileUpdateRequest,
     ): MyProfileResponse = userProfileService.updateMyProfile(principal.userId, request)
+
+    @Operation(
+        summary = "회원 탈퇴",
+        description = "계정을 내리고 개인정보를 지운다. 보유 코인은 소멸하고, 발급된 토큰은 더 이상 통하지 않는다. " +
+            "진행 중이거나 시작 전인 방이 있으면 409 로 막는다.",
+    )
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun withdraw(@CurrentUser principal: UserPrincipal) = userWithdrawService.withdraw(principal.userId)
 }

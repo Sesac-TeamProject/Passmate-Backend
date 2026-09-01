@@ -32,10 +32,21 @@ class RoomStatsService(
     private val participantRepository: ParticipantRepository,
 ) {
 
+    /**
+     * 아직 안 끝난 방(대기·진행 중)을 호스트로 갖고 있는지.
+     * 탈퇴하면 그 방에 들어와 있던 학생들이 갈 곳을 잃으므로 먼저 막는다.
+     */
+    fun hasUnfinishedHostedRoom(userId: Long): Boolean =
+        roomRepository.existsByHostUserIdAndStatusIn(userId, ACTIVE_STATUSES)
+
     fun getUserRoomStats(userId: Long) = UserRoomStats(
         joinedRoomCount = participantRepository.countByUserId(userId),
         hostedRoomCount = roomRepository.countByHostUserId(userId),
         hostedSessionCount = roomRepository.countByHostUserIdAndStatus(userId, RoomStatus.ENDED),
         totalStudentCount = roomRepository.sumParticipantCountByHostAndStatus(userId, RoomStatus.ENDED),
     )
+
+    private companion object {
+        val ACTIVE_STATUSES = listOf(RoomStatus.WAITING, RoomStatus.RUNNING)
+    }
 }

@@ -73,13 +73,28 @@ class CoinService(
         return record(userId, CoinTransactionType.REFUND, amount, wallet.balance, refType, refId, memo)
     }
 
+    /**
+     * 남은 코인을 전부 소멸시킨다(회원 탈퇴). 원장은 append-only 라 지우지 않고
+     * 반대 부호 한 줄을 쌓아 0 으로 만든다 — 나중에 "코인이 어디로 갔나"를 되짚을 수 있어야 한다.
+     * 잔액이 0 이면 아무것도 하지 않는다.
+     */
+    @Transactional
+    fun forfeitAll(userId: Long, memo: String): CoinTransaction? {
+        val wallet = coinWalletRepository.findByUserIdForUpdate(userId) ?: return null
+        val amount = wallet.balance
+        if (amount <= 0) return null
+
+        wallet.deduct(amount)
+        return record(userId, CoinTransactionType.ADMIN_ADJUST, -amount, wallet.balance, null, null, memo)
+    }
+
     private fun record(
         userId: Long,
         type: CoinTransactionType,
         signedAmount: Int,
         balanceAfter: Int,
-        refType: CoinRefType,
-        refId: Long,
+        refType: CoinRefType?,
+        refId: Long?,
         memo: String?,
     ): CoinTransaction = coinTransactionRepository.save(
         CoinTransaction(

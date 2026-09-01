@@ -29,6 +29,9 @@ interface RoomRepository : JpaRepository<Room, Long> {
 
     fun countByHostUserId(hostUserId: Long): Long
 
+    /** 아직 안 끝난 내 방이 있는지. 탈퇴를 막는 조건이다. */
+    fun existsByHostUserIdAndStatusIn(hostUserId: Long, statuses: Collection<RoomStatus>): Boolean
+
     fun countByHostUserIdAndStatus(hostUserId: Long, status: RoomStatus): Long
 
     /** 누적 학생 수. 방마다 캐시해 둔 participant_count 를 더한다 — 참가자 행을 다시 세지 않는다. */
