@@ -38,6 +38,10 @@ class ParticipantQueryService(
         return participantRepository.findAllByRoomIdOrderByJoinedAtAsc(roomId)
     }
 
+    /** 내가 참가자로 들어갔던 기록 전부(최근 순). 누적 리포트·참여한 방 목록이 쓴다. */
+    fun listByUser(userId: Long): List<Participant> =
+        participantRepository.findAllByUserIdOrderByJoinedAtDesc(userId)
+
     /** 그 방의 참가자 한 명. 다른 방 참가자 id 로는 찾히지 않는다. */
     fun getOfRoom(roomId: Long, participantId: Long): Participant =
         participantRepository.findById(participantId)
