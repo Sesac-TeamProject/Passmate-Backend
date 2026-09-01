@@ -7,12 +7,14 @@ import kr.passmate.common.dto.PageResponse
 import kr.passmate.common.security.CurrentUser
 import kr.passmate.common.security.UserPrincipal
 import kr.passmate.question.domain.QuestionSetStatus
+import kr.passmate.question.dto.AiGenerateRequest
 import kr.passmate.question.dto.QuestionRequest
 import kr.passmate.question.dto.QuestionResponse
 import kr.passmate.question.dto.QuestionSetCreateRequest
 import kr.passmate.question.dto.QuestionSetDetailResponse
 import kr.passmate.question.dto.QuestionSetSummaryResponse
 import kr.passmate.question.dto.QuestionSetUpdateRequest
+import kr.passmate.question.service.QuestionGenerationService
 import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.question.service.QuestionSetService
 import org.springframework.data.domain.Pageable
@@ -36,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController
 class QuestionSetController(
     private val questionSetService: QuestionSetService,
     private val questionSetQueryService: QuestionSetQueryService,
+    private val questionGenerationService: QuestionGenerationService,
 ) {
 
     @Operation(
@@ -101,6 +104,33 @@ class QuestionSetController(
         @Valid @RequestBody request: QuestionRequest,
     ): QuestionResponse =
         QuestionResponse.from(questionSetService.addQuestion(setId, principal.userId, request))
+
+    @Operation(
+        summary = "AI 문항 생성(세트에 추가)",
+        description = "주제·유형별 개수·난이도로 문항을 만들어 세트 끝에 붙인다. 확정 전에만 가능하다. " +
+            "무료 횟수를 다 쓰면 429, AI 실패는 502 로 응답하고 무료 횟수는 깎지 않는다.",
+    )
+    @PostMapping("/{setId}/questions/generate")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun generateQuestions(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable setId: Long,
+        @Valid @RequestBody request: AiGenerateRequest,
+    ): List<QuestionResponse> =
+        questionGenerationService.generate(setId, principal.userId, request).map(QuestionResponse::from)
+
+    @Operation(
+        summary = "문항 AI 재생성",
+        description = "그 문항만 같은 조건(유형·주제·난이도·배점·제한시간)으로 다시 만들어 교체한다. " +
+            "재생성은 무료 횟수를 깎지 않는다.",
+    )
+    @PostMapping("/{setId}/questions/{questionId}/regenerate")
+    fun regenerateQuestion(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable setId: Long,
+        @PathVariable questionId: Long,
+    ): QuestionResponse =
+        QuestionResponse.from(questionGenerationService.regenerate(setId, questionId, principal.userId))
 
     @Operation(summary = "문항 수정", description = "확정 전에만 가능하다.")
     @PutMapping("/{setId}/questions/{questionId}")
