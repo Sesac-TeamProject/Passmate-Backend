@@ -18,4 +18,12 @@ class CoinWalletService(
     fun createFor(userId: Long): CoinWallet =
         coinWalletRepository.findByUserId(userId)
             ?: coinWalletRepository.save(CoinWallet(userId = userId))
+
+    /**
+     * 보유 코인. 지갑이 없으면 0 으로 본다 —
+     * 조회하다가 지갑을 만들지 않는다(쓰기는 로그인·충전 경로에서만).
+     */
+    @Transactional(readOnly = true)
+    fun getBalance(userId: Long): Int =
+        coinWalletRepository.findByUserId(userId)?.balance ?: 0
 }

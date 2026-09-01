@@ -20,4 +20,7 @@ interface ParticipantRepository : JpaRepository<Participant, Long> {
     ): Participant?
 
     fun findAllByRoomIdAndNicknameStartingWith(roomId: Long, prefix: String): List<Participant>
+
+    /** 참여한 방 수. 같은 방에 두 번 입장할 수 없어 참가자 행 수 = 방 수다. */
+    fun countByUserId(userId: Long): Long
 }
