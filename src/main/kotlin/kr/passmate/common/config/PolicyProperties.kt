@@ -14,7 +14,10 @@ data class PolicyProperties(
     val entryFeeMax: Int,
     /** 최소 정산 신청 금액 (원) */
     val settlementMinAmount: Int,
-    /** 월 AI 문제 세트 생성 무료 횟수 (호스트) */
+    /**
+     * AI 문항 생성 무료 횟수 (호스트, 누적). 명세 "최초 5회 무료(이후 코인 정책 적용 예정)".
+     * ai_generation_log 에서 kind=SET·status=SUCCESS 를 세므로 실패는 횟수를 깎지 않는다.
+     */
     val aiFreeLimit: Int,
     /** 월 서술형 AI 분석 무료 횟수 (학생, FR-075) */
     val essayAnalysisFreeLimit: Int,

@@ -1,5 +1,6 @@
 package kr.passmate.question.service
 
+import kr.passmate.ai.client.GeneratedQuestion
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.question.domain.Question
@@ -68,6 +69,68 @@ class QuestionSetService(
                 points = request.points,
                 source = QuestionSource.MANUAL,
             ),
+        )
+        refreshStats(set)
+        return question
+    }
+
+    /**
+     * AI 가 만든 문항을 세트 끝에 붙인다. 직접 추가와 달리 여러 개를 한 번에 넣는다.
+     *
+     * 소유·확정 여부를 **여기서 다시 본다** — AI 호출이 도는 수십 초 사이에
+     * 세트가 확정되거나 삭제될 수 있기 때문이다.
+     */
+    @Transactional
+    fun appendGeneratedQuestions(
+        setId: Long,
+        ownerUserId: Long,
+        generated: List<GeneratedQuestion>,
+        topic: String,
+        timeLimitSec: Int,
+        points: Int,
+    ): List<Question> {
+        val set = getEditableSet(setId, ownerUserId)
+        var orderNo = (questionRepository.findTopBySetIdOrderByOrderNoDesc(setId)?.orderNo ?: 0)
+
+        val questions = generated.map {
+            questionRepository.save(
+                Question(
+                    setId = setId,
+                    orderNo = ++orderNo,
+                    type = it.type,
+                    content = it.content,
+                    choices = it.choices,
+                    answer = it.answer,
+                    explanation = it.explanation,
+                    topic = topic,
+                    difficulty = it.difficulty,
+                    timeLimitSec = timeLimitSec,
+                    points = points,
+                    source = QuestionSource.AI,
+                ),
+            )
+        }
+        refreshStats(set)
+        return questions
+    }
+
+    /** AI 재생성 결과로 문항 하나를 갈아끼운다. 순서·배점·제한시간은 유지된다. */
+    @Transactional
+    fun replaceWithGeneratedQuestion(
+        setId: Long,
+        questionId: Long,
+        ownerUserId: Long,
+        generated: GeneratedQuestion,
+    ): Question {
+        val set = getEditableSet(setId, ownerUserId)
+        val question = getQuestion(setId, questionId)
+        question.regenerateByAi(
+            type = generated.type,
+            content = generated.content,
+            choices = generated.choices,
+            answer = generated.answer,
+            explanation = generated.explanation,
+            difficulty = generated.difficulty,
         )
         refreshStats(set)
         return question
