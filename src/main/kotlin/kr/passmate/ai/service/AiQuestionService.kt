@@ -29,7 +29,7 @@ class AiQuestionService(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    /** 세트에 붙일 문항 여러 개. 무료 한도를 세는 쪽은 이 경로뿐이다. */
+    /** 세트에 붙일 문항 여러 개. */
     fun generateForSet(userId: Long, setId: Long, request: AiGenerationRequest): List<GeneratedQuestion> {
         verifyFreeLimit(userId)
         return call(userId, setId, AiGenerationKind.SET, request)
@@ -37,12 +37,15 @@ class AiQuestionService(
 
     /**
      * 문항 하나를 같은 조건으로 다시 만든다.
-     * 재생성은 무료 한도를 깎지 않는다(kind=REGENERATE) — 마음에 들 때까지 고쳐 쓰는 동작이라서다.
+     * **재생성도 무료 한도를 깎는다** — 문항 수가 적을 뿐 AI 를 한 번 더 부르는 것은 같다.
+     * 한도를 두지 않으면 재생성 버튼이 곧 무제한 유료 호출이 된다.
      */
-    fun regenerate(userId: Long, setId: Long, request: AiGenerationRequest): GeneratedQuestion =
-        call(userId, setId, AiGenerationKind.REGENERATE, request).first()
+    fun regenerate(userId: Long, setId: Long, request: AiGenerationRequest): GeneratedQuestion {
+        verifyFreeLimit(userId)
+        return call(userId, setId, AiGenerationKind.REGENERATE, request).first()
+    }
 
-    /** 남은 무료 횟수. 화면에 "AI 생성 n회 남음"을 띄우는 데 쓴다. */
+    /** 남은 무료 횟수. 화면에 "AI 생성 n회 남음"을 띄우는 데 쓴다. 생성·재생성을 합친 값이다. */
     fun remainingFreeCount(userId: Long): Int =
         (policy.aiFreeLimit - successCount(userId)).coerceAtLeast(0)
 
@@ -50,21 +53,19 @@ class AiQuestionService(
         if (successCount(userId) >= policy.aiFreeLimit) {
             throw BusinessException(
                 ErrorCode.AI_FREE_LIMIT_EXCEEDED,
-                "AI 문항 생성은 ${policy.aiFreeLimit}회까지 무료입니다. 직접 문항을 추가해 주세요.",
+                "AI 문항 생성·재생성은 합쳐서 ${policy.aiFreeLimit}회까지 무료입니다. 직접 문항을 추가해 주세요.",
             )
         }
     }
 
+    /** 생성·재생성을 가리지 않고 성공한 호출을 센다. */
     private fun successCount(userId: Long): Int =
-        logRepository.countByUserIdAndKindAndStatus(
-            userId,
-            AiGenerationKind.SET,
-            AiGenerationStatus.SUCCESS,
-        ).toInt()
+        logRepository.countByUserIdAndStatus(userId, AiGenerationStatus.SUCCESS).toInt()
 
     /**
      * 호출 → 실패하면 재시도 가능한 것만 **한 번 더** → 그래도 안 되면 502.
      * 실패는 SUCCESS 로 기록되지 않으므로 무료 횟수가 깎이지 않는다.
+     * 재시도 1회는 같은 요청의 연장이라 한도를 두 번 깎지 않는다 — 로그도 한 줄만 남는다.
      */
     private fun call(
         userId: Long,

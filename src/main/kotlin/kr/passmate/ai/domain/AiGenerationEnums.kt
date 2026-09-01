@@ -1,6 +1,6 @@
 package kr.passmate.ai.domain
 
-/** 무엇을 생성했는지. 무료 한도는 SET 만 센다(REGENERATE·FILE 은 세지 않는다). */
+/** 무엇을 생성했는지. 셋 다 AI 호출 1회라 무료 한도에는 **전부** 들어간다 — kind 는 통계·추적용이다. */
 enum class AiGenerationKind {
     /** 조건을 받아 문항 여러 개를 만들어 세트에 추가 */
     SET,

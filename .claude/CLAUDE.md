@@ -105,7 +105,7 @@ MVP 1차에서는 **Redis를 도입하지 않는다.** `docker/compose.local.yml
 | 세션 진행 상태 · 랭킹 | MySQL — `answer` 저장 후 `SUM(score) GROUP BY participant` 집계 | `RoomStateRepository` 구현체 교체 |
 | PIN 유일성 | `PinService`가 6자리 생성 → 활성 방(`WAITING`/`RUNNING`) 중복 조회 → 충돌 시 재생성 | `SETNX` |
 | refresh 토큰 | stateless JWT 검증(서명 + 만료). 로그아웃은 클라이언트가 토큰 폐기 | Redis TTL + 즉시 무효화 |
-| AI 무료 한도 | `ai_generation_log`에서 `kind='SET' AND status='SUCCESS'` COUNT | Redis 카운터 |
+| AI 무료 한도 | `ai_generation_log`에서 `status='SUCCESS'` COUNT (kind 무관 — 재생성도 호출 1회) | Redis 카운터 |
 | 코인 락 | DB 비관적 락 (원래도 이쪽이 주(主)) | 그대로 |
 
 **지켜야 할 것**: 세션 상태 접근은 반드시 `RoomStateRepository` **인터페이스**를 통한다. 구현체(`JpaRoomStateRepository`)를 Service가 직접 알지 않게 해야 나중에 Redis 도입이 구현체 추가로 끝난다.

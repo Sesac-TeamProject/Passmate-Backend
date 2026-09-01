@@ -148,6 +148,27 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `한도를 다 쓰면 재생성도 막힌다`() {
+        val setId = createSet()
+        // 첫 생성으로 문항을 하나 만들고, 나머지 한도를 전부 소진한다
+        generate(setId, """{"topic":"주제","counts":{"OX":1}}""").andExpect(status().isCreated)
+        val questionId = questionsOf(setId)[0].get("id").asLong()
+        repeat(policy.aiFreeLimit - 1) {
+            generate(setId, """{"topic":"주제 $it","counts":{"OX":1}}""").andExpect(status().isCreated)
+        }
+        val callsSoFar = fake.callCount
+
+        mockMvc.perform(
+            post("/question-sets/{id}/questions/{qid}/regenerate", setId, questionId)
+                .header("Authorization", "Bearer $ownerToken"),
+        )
+            .andExpect(status().isTooManyRequests)
+            .andExpect(jsonPath("$.code").value("AI_FREE_LIMIT_EXCEEDED"))
+
+        assertThat(fake.callCount).isEqualTo(callsSoFar)
+    }
+
+    @Test
     fun `확정된 세트와 남의 세트는 생성 전에 막는다`() {
         val confirmed = createSet().also {
             addManualQuestion(it, """{"type":"OX","content":"문항","answer":"O"}""")
@@ -185,7 +206,7 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `재생성은 같은 자리에 새 내용을 넣고 무료 횟수를 깎지 않는다`() {
+    fun `재생성은 같은 자리에 새 내용을 넣고 무료 횟수도 깎는다`() {
         val setId = createSet()
         generate(setId, """{"topic":"운영체제","counts":{"MCQ":1},"difficulty":"EASY"}""")
             .andExpect(status().isCreated)
@@ -218,8 +239,8 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
         assertThat(fake.lastRequest!!.counts).isEqualTo(mapOf(QuestionType.MCQ to 1))
         assertThat(fake.lastRequest!!.topic).isEqualTo("운영체제")
 
-        // 생성 1회만 한도에 잡히고, 재생성은 REGENERATE 로 따로 남는다
-        assertThat(successCount()).isEqualTo(1)
+        // 재생성도 AI 호출 1회다 — 생성과 같은 한도를 쓴다
+        assertThat(successCount()).isEqualTo(2)
         assertThat(logRepository.findAll().map { it.kind })
             .containsExactly(AiGenerationKind.SET, AiGenerationKind.REGENERATE)
     }
@@ -241,11 +262,7 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     // ---------- helpers ----------
 
     private fun successCount(): Int =
-        logRepository.countByUserIdAndKindAndStatus(
-            ownerUserId,
-            AiGenerationKind.SET,
-            AiGenerationStatus.SUCCESS,
-        ).toInt()
+        logRepository.countByUserIdAndStatus(ownerUserId, AiGenerationStatus.SUCCESS).toInt()
 
     private fun register(key: String): Pair<Long, String> {
         val outcome = userService.loginOrRegister(AuthProvider.GOOGLE, "ai-$key", "$key@example.com", key, null)

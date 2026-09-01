@@ -122,7 +122,7 @@ class QuestionSetController(
     @Operation(
         summary = "문항 AI 재생성",
         description = "그 문항만 같은 조건(유형·주제·난이도·배점·제한시간)으로 다시 만들어 교체한다. " +
-            "재생성은 무료 횟수를 깎지 않는다.",
+            "재생성도 AI 호출이라 생성과 같은 무료 횟수를 쓴다 — 다 쓰면 429.",
     )
     @PostMapping("/{setId}/questions/{questionId}/regenerate")
     fun regenerateQuestion(
