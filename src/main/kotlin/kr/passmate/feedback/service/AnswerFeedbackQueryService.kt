@@ -5,10 +5,14 @@ import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.common.security.AuthPrincipal
 import kr.passmate.common.security.UserPrincipal
+import kr.passmate.feedback.domain.AiFeedbackStatus
 import kr.passmate.feedback.dto.AnalysisStatus
+import kr.passmate.feedback.dto.AnswerFeedbackView
 import kr.passmate.feedback.dto.EssayAnalysisView
 import kr.passmate.feedback.dto.MyAnswerResponse
+import kr.passmate.feedback.dto.TeacherReviewView
 import kr.passmate.feedback.repository.AiFeedbackRepository
+import kr.passmate.feedback.repository.TeacherReviewRepository
 import kr.passmate.room.service.RoomQueryService
 import kr.passmate.session.service.AnswerQueryService
 import kr.passmate.session.service.SessionQueryService
@@ -29,8 +33,28 @@ class AnswerFeedbackQueryService(
     private val answerQueryService: AnswerQueryService,
     private val essayAnalysisService: EssayAnalysisService,
     private val aiFeedbackRepository: AiFeedbackRepository,
+    private val teacherReviewRepository: TeacherReviewRepository,
     private val policy: PolicyProperties,
 ) {
+
+    /**
+     * 답안 여러 건의 피드백을 한 번에. 결과 화면은 문항 수만큼 답안을 훑으므로
+     * 건건이 조회하면 그대로 N+1 이 된다.
+     */
+    fun viewsOf(answerIds: Collection<Long>): Map<Long, AnswerFeedbackView> {
+        if (answerIds.isEmpty()) return emptyMap()
+        val ids = answerIds.toSet()
+        val feedbacks = aiFeedbackRepository.findAllByAnswerIdIn(ids).associateBy { it.answerId }
+        val reviews = teacherReviewRepository.findAllByAnswerIdIn(ids).associateBy { it.answerId }
+        return ids.associateWith { AnswerFeedbackView.of(feedbacks[it], reviews[it]) }
+    }
+
+    /** 분석이 실제로 끝난 건수. 방 리포트의 "AI 분석 건수"다 — 진행 중·실패는 세지 않는다. */
+    fun countAnalyzed(answerIds: Collection<Long>): Int {
+        if (answerIds.isEmpty()) return 0
+        return aiFeedbackRepository.findAllByAnswerIdIn(answerIds.toSet())
+            .count { it.status == AiFeedbackStatus.DONE }
+    }
 
     fun myAnswer(roomId: Long, questionId: Long, principal: AuthPrincipal): MyAnswerResponse {
         val room = roomQueryService.getRoom(roomId)
@@ -40,6 +64,7 @@ class AnswerFeedbackQueryService(
 
         val answer = answerQueryService.getMyAnswer(roomId, questionId, principal)
         val feedback = aiFeedbackRepository.findByAnswerId(answer.id)
+        val review = teacherReviewRepository.findByAnswerId(answer.id)
         val userId = (principal as? UserPrincipal)?.userId
 
         return MyAnswerResponse(
@@ -60,6 +85,7 @@ class AnswerFeedbackQueryService(
             explanation = question.explanation?.takeIf { sq.isEnded },
             analysisStatus = AnalysisStatus.of(feedback),
             analysis = feedback?.let { EssayAnalysisView.from(it) },
+            teacherReview = review?.let { TeacherReviewView.from(it) },
             remainingFreeAnalysis = userId?.let { essayAnalysisService.remainingFreeCount(it) },
             analysisCoinCost = policy.essayAnalysisCoinCost,
         )

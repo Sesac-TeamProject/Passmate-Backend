@@ -7,6 +7,7 @@ import kr.passmate.common.security.GuestPrincipal
 import kr.passmate.common.security.UserPrincipal
 import kr.passmate.room.service.ParticipantQueryService
 import kr.passmate.session.domain.Answer
+import kr.passmate.session.repository.AnswerQueryRepository
 import kr.passmate.session.repository.AnswerRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -20,6 +21,7 @@ class AnswerQueryService(
     private val sessionQueryService: SessionQueryService,
     private val participantQueryService: ParticipantQueryService,
     private val answerRepository: AnswerRepository,
+    private val answerQueryRepository: AnswerQueryRepository,
 ) {
 
     /** 내가 그 문항에 낸 답안. 아직 안 냈으면 null. */
@@ -34,11 +36,18 @@ class AnswerQueryService(
         findMyAnswer(roomId, questionId, principal)
             ?: throw BusinessException(ErrorCode.NOT_FOUND, "아직 제출한 답안이 없습니다.")
 
+    /** 방에서 나온 답안 전부. 결과·리포트가 한 번에 받아 격자로 편다. */
+    fun listByRoom(roomId: Long): List<Answer> = answerQueryRepository.findAllByRoomId(roomId)
+
+    /** 한 참가자가 낸 답안 전부. */
+    fun listByParticipant(participantId: Long): List<Answer> =
+        answerRepository.findAllByParticipantId(participantId)
+
     fun getAnswer(answerId: Long): Answer =
         answerRepository.findById(answerId).orElseThrow { BusinessException(ErrorCode.NOT_FOUND, "답안을 찾을 수 없습니다.") }
 
     /** 회원은 계정으로, 게스트는 토큰에 담긴 참가자 id 로 자기 자신을 찾는다. */
-    private fun resolveParticipantId(roomId: Long, principal: AuthPrincipal): Long = when (principal) {
+    fun resolveParticipantId(roomId: Long, principal: AuthPrincipal): Long = when (principal) {
         is UserPrincipal -> participantQueryService.listJoined(roomId)
             .firstOrNull { it.userId == principal.userId }?.id
             ?: throw BusinessException(ErrorCode.PARTICIPANT_NOT_FOUND, "이 방에 참여한 기록이 없습니다.")

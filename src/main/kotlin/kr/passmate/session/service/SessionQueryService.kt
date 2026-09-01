@@ -84,13 +84,18 @@ class SessionQueryService(
             ?: throw BusinessException(ErrorCode.QUESTION_NOT_FOUND, "이 방에서 출제된 문항이 아닙니다.")
 
     /**
-     * 방에 출제된 문항의 원본. **정답·해설이 들어 있다** — 언제 내보낼지는 호출자가 판단한다.
+     * 방에 출제된 문항 원본 전부. **정답·해설이 들어 있다** — 언제 내보낼지는 호출자가 판단한다.
      * 세트는 호스트 소유라 세션 문맥에서만 호스트 자격으로 꺼낸다.
+     *
+     * 결과·리포트는 문항마다 원본이 필요하다. 한 건씩 찾으면 문항 수만큼 세트를 다시 읽는다.
      */
-    fun findQuestion(room: Room, questionId: Long): Question? =
+    fun questionsOf(room: Room): List<Question> =
         room.questionSetId
             ?.let { setId -> questionSetQueryService.getDetail(setId, room.hostUserId).second }
-            ?.firstOrNull { it.id == questionId }
+            .orEmpty()
+
+    fun findQuestion(room: Room, questionId: Long): Question? =
+        questionsOf(room).firstOrNull { it.id == questionId }
 
     /**
      * 재접속 복구용 스냅샷. 끊겼다 돌아온 참가자는 이걸 받아 현재 화면을 그대로 복원한다.

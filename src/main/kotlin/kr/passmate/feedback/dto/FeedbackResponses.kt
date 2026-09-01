@@ -2,6 +2,7 @@ package kr.passmate.feedback.dto
 
 import kr.passmate.feedback.domain.AiFeedback
 import kr.passmate.feedback.domain.AiFeedbackStatus
+import kr.passmate.feedback.domain.TeacherReview
 import kr.passmate.question.domain.QuestionType
 import java.time.LocalDateTime
 
@@ -67,6 +68,7 @@ data class MyAnswerResponse(
     val explanation: String?,
     val analysisStatus: AnalysisStatus,
     val analysis: EssayAnalysisView?,
+    val teacherReview: TeacherReviewView?,
     /** 이번 달 남은 무료 분석 횟수. 게스트는 분석 자체가 막혀 있어 null */
     val remainingFreeAnalysis: Int?,
     /** 무료 한도를 넘겼을 때 1건당 차감할 코인 */
@@ -81,3 +83,41 @@ data class EssayAnalysisRequestResponse(
     val remainingFreeAnalysis: Int,
     val analysisCoinCost: Int,
 )
+
+/**
+ * 선생님 첨삭. AI 피드백과 **다른 필드로** 내보낸다 —
+ * 사람이 본 것과 기계가 본 것이 한 덩어리로 섞이면 첨삭의 무게가 사라진다.
+ */
+data class TeacherReviewView(
+    val comment: String?,
+    /** 서술형 보정 점수. 값이 있으면 최종 점수가 이걸로 바뀐 것 */
+    val adjustedScore: Int?,
+    val improvement: String?,
+    val reviewedAt: LocalDateTime,
+) {
+    companion object {
+        fun from(review: TeacherReview) = TeacherReviewView(
+            comment = review.comment,
+            adjustedScore = review.adjustedScore,
+            improvement = review.improvement,
+            reviewedAt = review.reviewedAt,
+        )
+    }
+}
+
+/** 답안 한 건에 달린 피드백 묶음. 결과 화면이 문항마다 이걸 하나씩 받는다. */
+data class AnswerFeedbackView(
+    val analysisStatus: AnalysisStatus,
+    val analysis: EssayAnalysisView?,
+    val teacherReview: TeacherReviewView?,
+) {
+    companion object {
+        val NONE = AnswerFeedbackView(AnalysisStatus.NOT_REQUESTED, null, null)
+
+        fun of(feedback: AiFeedback?, review: TeacherReview?) = AnswerFeedbackView(
+            analysisStatus = AnalysisStatus.of(feedback),
+            analysis = feedback?.let { EssayAnalysisView.from(it) },
+            teacherReview = review?.let { TeacherReviewView.from(it) },
+        )
+    }
+}

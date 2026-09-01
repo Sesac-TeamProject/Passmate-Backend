@@ -10,4 +10,6 @@ interface AnswerRepository : JpaRepository<Answer, Long> {
     fun findByParticipantIdAndSessionQuestionId(participantId: Long, sessionQuestionId: Long): Answer?
 
     fun findAllBySessionQuestionId(sessionQuestionId: Long): List<Answer>
+
+    fun findAllByParticipantId(participantId: Long): List<Answer>
 }

@@ -21,4 +21,17 @@ interface AnswerQueryRepository : JpaRepository<Answer, Long> {
         """,
     )
     fun sumScoreByParticipant(@Param("roomId") roomId: Long): List<ParticipantScore>
+
+    /**
+     * 방에서 나온 답안 전부. 결과 화면이 문항 × 참가자 격자를 그리는 재료다.
+     * 참가자마다 따로 조회하면 참가자 수만큼 쿼리가 나간다.
+     */
+    @Query(
+        """
+        select a from Answer a
+        join SessionQuestion sq on sq.id = a.sessionQuestionId
+        where sq.roomId = :roomId
+        """,
+    )
+    fun findAllByRoomId(@Param("roomId") roomId: Long): List<Answer>
 }
