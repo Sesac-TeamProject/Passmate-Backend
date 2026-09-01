@@ -53,6 +53,10 @@ class ParticipantQueryService(
         return NicknameCheckResult(available = false, suggestions = suggestions)
     }
 
+    /** 이 회원이 지금 이 방에 들어와 있는지. STOMP 구독 인가에서 쓴다. */
+    fun isJoined(roomId: Long, userId: Long): Boolean =
+        participantRepository.findByRoomIdAndUserIdAndStatus(roomId, userId, ParticipantStatus.JOINED) != null
+
     private fun verifyRoomExists(roomId: Long) {
         if (!roomRepository.existsById(roomId)) throw BusinessException(ErrorCode.ROOM_NOT_FOUND)
     }

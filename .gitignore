@@ -60,6 +60,15 @@ replay_pid*
 Thumbs.db
 desktop.ini
 
+### 문서 ###
+# 기능 명세서는 노션이 원본이다. 레포에 사본을 두면 노션에서 고칠 때마다 어긋나고,
+# 어긋난 사본을 믿고 구현하는 쪽이 조회가 느린 것보다 나쁘다. 빌드도 참조하지 않는다.
+# 반대로 docs/erd/ 의 dbml·sql 은 Flyway 의 근거이자 ddl-auto validate 의 기준이라 추적한다
+docs/spec/
+# ERD 이미지는 passmate.dbml 로 다시 그릴 수 있는 파생물이고, 바이너리라
+# 고칠 때마다 히스토리에 통째로 쌓인다. 그림은 노션 ERD 페이지에
+docs/erd/*.png
+
 ### 기타 ###
 *.tmp
 *.bak

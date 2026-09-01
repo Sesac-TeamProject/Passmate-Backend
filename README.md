@@ -37,10 +37,11 @@ MySQL 은 호스트 **3307** 로 열린다 — 맥에 MySQL 을 직접 깔았을
 | 문서 | 위치 |
 |---|---|
 | 작업 규칙 (아키텍처 · 컨벤션 · 금지사항) | [.claude/CLAUDE.md](.claude/CLAUDE.md) |
-| 기능 명세서 v2 — US1~20, FR-001~074 | [docs/spec/feature-spec-v2.md](docs/spec/feature-spec-v2.md) |
-| 기능 명세서 v1 (원본, 참고용) | [docs/spec/feature-spec-v1-original.md](docs/spec/feature-spec-v1-original.md) |
-| ERD v2 — 34 테이블 | [docs/erd/](docs/erd/) (`passmate.dbml` · `passmate-mysql.sql` · `passmate-erd.png`) |
-| API 명세서 v2 (117행) · 백엔드 아키텍처 설계 | 노션 — PassMate 문서 |
+| ERD v2 — 34 테이블 (스키마 원본) | [docs/erd/](docs/erd/) (`passmate.dbml` · `passmate-mysql.sql`) |
+| 기능 명세서 v2 · API 명세서 v2 · 아키텍처 설계 · 실시간 세션(WebSocket) | 노션 — PassMate 문서 |
+
+산문 문서는 노션이 원본이라 레포에 사본을 두지 않는다(`docs/spec/`은 추적 제외).
+`docs/erd/`만 예외 — Flyway 의 근거이자 스키마 검증 기준이라 코드와 함께 버전 관리한다.
 
 문서 우선순위: **피그마 v6 화면 > 기능 명세서 v2 > API 명세서 v2 > ERD v2**
 

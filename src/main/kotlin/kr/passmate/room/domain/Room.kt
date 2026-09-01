@@ -139,6 +139,33 @@ class Room(
         return status
     }
 
+    /** 세션을 시작한다. 대기 중일 때만 가능하고, 이후 참가자 입장은 막힌다. */
+    fun start(at: LocalDateTime = LocalDateTime.now()) {
+        if (status != RoomStatus.WAITING) {
+            throw BusinessException(ErrorCode.CONFLICT, "대기 중인 방만 시작할 수 있습니다.")
+        }
+        status = RoomStatus.RUNNING
+        startedAt = at
+    }
+
+    /** 다음 문항으로 넘어간다. 진행 중일 때만 가능하다. */
+    fun advanceQuestion(orderNo: Int) {
+        if (status != RoomStatus.RUNNING) {
+            throw BusinessException(ErrorCode.CONFLICT, "진행 중인 방이 아닙니다.")
+        }
+        currentQuestionNo = orderNo
+    }
+
+    fun verifyRunning() {
+        if (status != RoomStatus.RUNNING) {
+            throw BusinessException(ErrorCode.SESSION_NOT_RUNNING)
+        }
+    }
+
+    fun lockScreen(locked: Boolean) {
+        screenLocked = locked
+    }
+
     fun increaseParticipantCount() {
         participantCount += 1
     }
