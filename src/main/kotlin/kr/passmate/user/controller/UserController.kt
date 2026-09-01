@@ -2,11 +2,15 @@ package kr.passmate.user.controller
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import jakarta.validation.Valid
 import kr.passmate.common.security.CurrentUser
 import kr.passmate.common.security.UserPrincipal
 import kr.passmate.user.dto.MyProfileResponse
+import kr.passmate.user.dto.UserProfileUpdateRequest
 import kr.passmate.user.service.UserProfileService
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PutMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
@@ -25,4 +29,14 @@ class UserController(
     @GetMapping("/me")
     fun me(@CurrentUser principal: UserPrincipal): MyProfileResponse =
         userProfileService.getMyProfile(principal.userId)
+
+    @Operation(
+        summary = "내 정보 수정",
+        description = "닉네임·프로필 이미지·기본 캐릭터를 고친다. 바뀐 프로필을 그대로 돌려준다.",
+    )
+    @PutMapping("/me")
+    fun updateMe(
+        @CurrentUser principal: UserPrincipal,
+        @Valid @RequestBody request: UserProfileUpdateRequest,
+    ): MyProfileResponse = userProfileService.updateMyProfile(principal.userId, request)
 }

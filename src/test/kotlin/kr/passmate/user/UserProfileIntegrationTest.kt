@@ -1,5 +1,6 @@
 package kr.passmate.user
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import kr.passmate.common.security.JwtTokenProvider
 import kr.passmate.room.domain.RoomStatus
 import kr.passmate.room.repository.RoomRepository
@@ -15,6 +16,7 @@ import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.transaction.annotation.Transactional
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional
 class UserProfileIntegrationTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var mockMvc: MockMvc
+    @Autowired private lateinit var objectMapper: ObjectMapper
     @Autowired private lateinit var userService: UserService
     @Autowired private lateinit var jwtTokenProvider: JwtTokenProvider
     @Autowired private lateinit var roomService: RoomService
@@ -122,4 +125,51 @@ class UserProfileIntegrationTest : IntegrationTestSupport() {
         roomRepository.flush()
         check(room.status == RoomStatus.ENDED)
     }
+
+    @Test
+    fun `닉네임과 기본 캐릭터를 고치면 바뀐 프로필이 돌아온다`() {
+        updateMe(mapOf("nickname" to "새이름", "defaultAvatarId" to "cat", "profileImageUrl" to "https://img.example/b.png"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.nickname").value("새이름"))
+            .andExpect(jsonPath("$.defaultAvatarId").value("cat"))
+            .andExpect(jsonPath("$.profileImageUrl").value("https://img.example/b.png"))
+
+        mockMvc.perform(get("/users/me").header("Authorization", "Bearer $token"))
+            .andExpect(jsonPath("$.nickname").value("새이름"))
+    }
+
+    @Test
+    fun `프로필 이미지를 비우면 지워진다`() {
+        updateMe(mapOf("nickname" to "혜림"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.profileImageUrl").doesNotExist())
+    }
+
+    @Test
+    fun `닉네임 앞뒤 공백은 잘라서 저장한다`() {
+        updateMe(mapOf("nickname" to "  혜림  "))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.nickname").value("혜림"))
+    }
+
+    @Test
+    fun `빈 닉네임은 받지 않는다`() {
+        updateMe(mapOf("nickname" to "   "))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+    }
+
+    @Test
+    fun `30자를 넘는 닉네임은 받지 않는다`() {
+        updateMe(mapOf("nickname" to "가".repeat(31)))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+    }
+
+    private fun updateMe(body: Map<String, Any?>) = mockMvc.perform(
+        put("/users/me")
+            .header("Authorization", "Bearer $token")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(body)),
+    )
 }

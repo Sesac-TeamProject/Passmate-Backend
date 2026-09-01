@@ -1,6 +1,8 @@
 package kr.passmate.user.dto
 
 import io.swagger.v3.oas.annotations.media.Schema
+import jakarta.validation.constraints.Size
+import jakarta.validation.constraints.NotBlank
 import kr.passmate.room.service.UserRoomStats
 import kr.passmate.user.domain.AuthProvider
 import kr.passmate.user.domain.User
@@ -68,3 +70,19 @@ data class MyProfileResponse(
         )
     }
 }
+
+/** 내 정보 수정 요청 (C-02-1 계정 정보 변경 · C-02-7 내 캐릭터 변경). */
+@Schema(description = "내 정보 수정")
+data class UserProfileUpdateRequest(
+    @field:NotBlank(message = "닉네임은 필수입니다.")
+    @field:Size(max = 30, message = "닉네임은 30자를 넘을 수 없습니다.")
+    val nickname: String,
+
+    @field:Size(max = 500)
+    @field:Schema(description = "프로필 이미지 URL. 비우면 지운다")
+    val profileImageUrl: String? = null,
+
+    @field:Size(max = 30)
+    @field:Schema(description = "기본 캐릭터. 방에 입장할 때 avatarId 기본값이 된다")
+    val defaultAvatarId: String? = null,
+)

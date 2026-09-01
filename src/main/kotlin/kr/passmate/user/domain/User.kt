@@ -9,6 +9,8 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
 import kr.passmate.common.domain.BaseTimeEntity
+import kr.passmate.common.exception.BusinessException
+import kr.passmate.common.exception.ErrorCode
 import java.time.LocalDateTime
 
 /**
@@ -76,6 +78,20 @@ class User(
     fun syncSocialProfile(email: String?, profileImageUrl: String?) {
         email?.let { this.email = it }
         profileImageUrl?.let { this.profileImageUrl = it }
+    }
+
+    /**
+     * 사용자가 마이페이지에서 직접 고친 값(FR-064).
+     * 소셜 동기화(syncSocialProfile)가 이 값을 덮어쓰지 않는다 — 닉네임은 가입 때만 소셜 값을 쓴다.
+     */
+    fun updateProfile(nickname: String, profileImageUrl: String?, defaultAvatarId: String?) {
+        val trimmed = nickname.trim()
+        if (trimmed.isBlank()) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "닉네임은 비어 있을 수 없습니다.")
+        }
+        this.nickname = trimmed.take(NICKNAME_MAX_LENGTH)
+        this.profileImageUrl = profileImageUrl
+        this.defaultAvatarId = defaultAvatarId
     }
 
     /** 제재로 정지. 로그인·입장이 차단된다. */
