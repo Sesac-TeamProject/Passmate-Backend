@@ -43,4 +43,31 @@ class RoomRatingQueryService(
             deadline = deadline,
         )
     }
+
+    /**
+     * 이 호스트가 받은 평가를 방별로 묶은 요약. 방 목록 화면이 방마다 조회하지 않도록
+     * 한 번에 읽어 나눈다.
+     */
+    fun starsOfHost(hostUserId: Long): HostRatingSummary {
+        val ratings = roomRatingRepository.findAllByHostUserId(hostUserId)
+        return HostRatingSummary(
+            overallAverage = ratings.map { it.stars }.averageOrNull(),
+            countByRoom = ratings.groupingBy { it.roomId }.eachCount(),
+            averageByRoom = ratings.groupBy { it.roomId }
+                .mapValues { (_, rows) -> rows.map { it.stars }.averageOrNull() ?: 0.0 },
+            totalCount = ratings.size,
+        )
+    }
+
+    /** 평가가 없으면 0.0 이 아니라 null 이다 — 0.0 은 "별 0개"로 읽힌다. */
+    private fun List<Int>.averageOrNull(): Double? =
+        if (isEmpty()) null else Math.round(average() * 100.0) / 100.0
 }
+
+/** 호스트가 받은 평가 요약. 전체 평균과 방별 평균을 함께 준다. */
+data class HostRatingSummary(
+    val overallAverage: Double?,
+    val averageByRoom: Map<Long, Double>,
+    val countByRoom: Map<Long, Int>,
+    val totalCount: Int,
+)

@@ -162,6 +162,15 @@ class Room(
         }
     }
 
+    /**
+     * 세션이 끝났을 때 결과 요약을 박아 둔다(ERD room.avg_score · correct_rate).
+     * 목록 화면이 방마다 답안을 다시 세지 않게 하려는 값이다.
+     */
+    fun recordResult(avgScore: java.math.BigDecimal, correctRate: java.math.BigDecimal) {
+        this.avgScore = avgScore
+        this.correctRate = correctRate
+    }
+
     fun lockScreen(locked: Boolean) {
         screenLocked = locked
     }
