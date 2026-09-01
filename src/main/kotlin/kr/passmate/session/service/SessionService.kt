@@ -1,0 +1,183 @@
+package kr.passmate.session.service
+
+import kr.passmate.common.exception.BusinessException
+import kr.passmate.common.exception.ErrorCode
+import kr.passmate.question.domain.Question
+import kr.passmate.question.domain.QuestionSetStatus
+import kr.passmate.question.service.QuestionSetQueryService
+import kr.passmate.room.domain.Room
+import kr.passmate.room.repository.RoomRepository
+import kr.passmate.session.domain.SessionEventType
+import kr.passmate.session.domain.SessionQuestion
+import kr.passmate.session.dto.QuestionEndedPayload
+import kr.passmate.session.dto.QuestionStartedPayload
+import kr.passmate.session.repository.RoomStateRepository
+import kr.passmate.session.repository.SessionQuestionRepository
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
+
+/**
+ * 세션 제어. **호스트의 REST 호출로만 상태가 바뀐다** — WebSocket 은 결과를 흘려보내기만 한다.
+ * 그래서 호스트 검증이 여기 한 곳에만 있으면 된다.
+ */
+@Service
+class SessionService(
+    private val roomRepository: RoomRepository,
+    private val sessionQuestionRepository: SessionQuestionRepository,
+    private val questionSetQueryService: QuestionSetQueryService,
+    private val roomStateRepository: RoomStateRepository,
+    private val sessionQueryService: SessionQueryService,
+    private val eventPublisher: SessionEventPublisher,
+) {
+
+    /**
+     * 세션을 시작한다. 확정된 문제 세트의 문항을 session_question 으로 복사해 두고 1번 문항을 연다.
+     * 복사하는 이유: 세트는 여러 방에 재사용되는데 시작·마감 시각과 집계는 방마다 다르다.
+     */
+    @Transactional
+    fun start(roomId: Long, hostUserId: Long) {
+        val room = ownedRoom(roomId, hostUserId)
+        val setId = room.questionSetId ?: throw BusinessException(ErrorCode.QUESTION_SET_REQUIRED)
+        val (set, questions) = questionSetQueryService.getDetail(setId, hostUserId)
+
+        if (set.status != QuestionSetStatus.CONFIRMED) {
+            throw BusinessException(ErrorCode.QUESTION_SET_REQUIRED, "확정된 세트만 출제할 수 있습니다.")
+        }
+        if (questions.isEmpty()) throw BusinessException(ErrorCode.QUESTION_SET_EMPTY)
+
+        room.start()
+        sessionQuestionRepository.saveAll(
+            questions.map {
+                SessionQuestion(
+                    roomId = roomId,
+                    questionId = it.id,
+                    orderNo = it.orderNo,
+                    timeLimitSec = it.timeLimitSec,
+                )
+            },
+        )
+        eventPublisher.toRoom(roomId, SessionEventType.SESSION_STARTED)
+        openQuestion(room, questions.first().orderNo, questions)
+    }
+
+    /** 현재 문항이 열려 있으면 먼저 닫고, 다음 문항을 연다. */
+    @Transactional
+    fun next(roomId: Long, hostUserId: Long) {
+        val room = ownedRoom(roomId, hostUserId)
+        room.verifyRunning()
+        val (_, questions) = questionSet(room, hostUserId)
+
+        currentRunning(roomId)?.let { closeQuestion(it, questions) }
+
+        val nextOrderNo = room.currentQuestionNo + 1
+        if (questions.none { it.orderNo == nextOrderNo }) {
+            throw BusinessException(ErrorCode.SESSION_ALREADY_FINISHED)
+        }
+        openQuestion(room, nextOrderNo, questions)
+    }
+
+    /** 호스트가 제한시간 전에 바로 마감한다. */
+    @Transactional
+    fun endCurrentQuestion(roomId: Long, hostUserId: Long) {
+        val room = ownedRoom(roomId, hostUserId)
+        room.verifyRunning()
+        val current = currentRunning(roomId)
+            ?: throw BusinessException(ErrorCode.QUESTION_NOT_RUNNING)
+        val (_, questions) = questionSet(room, hostUserId)
+        closeQuestion(current, questions)
+    }
+
+    /** 세션을 끝낸다. 열려 있던 문항도 함께 닫는다. */
+    @Transactional
+    fun end(roomId: Long, hostUserId: Long) {
+        val room = ownedRoom(roomId, hostUserId)
+        room.verifyRunning()
+        val (_, questions) = questionSet(room, hostUserId)
+        currentRunning(roomId)?.let { closeQuestion(it, questions) }
+
+        room.close()
+        eventPublisher.toRoom(roomId, SessionEventType.SESSION_ENDED, sessionQueryService.ranking(roomId))
+    }
+
+    /**
+     * 제한시간이 지난 문항을 마감한다(서버 권위 타이머가 호출).
+     * 호스트의 "바로 마감"과 겹쳐도 SessionQuestion.end() 가 멱등이라 두 번 닫히지 않는다.
+     */
+    @Transactional
+    fun endByTimeout(sessionQuestionId: Long) {
+        val sq = sessionQuestionRepository.findById(sessionQuestionId).orElse(null) ?: return
+        if (sq.isEnded) return
+        val room = roomRepository.findById(sq.roomId).orElse(null) ?: return
+        val questions = runCatching { questionSetQueryService.getDetail(room.questionSetId!!, room.hostUserId).second }
+            .getOrNull() ?: return
+        closeQuestion(sq, questions)
+    }
+
+    // ---------- 내부 ----------
+
+    private fun openQuestion(room: Room, orderNo: Int, questions: List<Question>) {
+        val sq = sessionQuestionRepository.findByRoomIdAndOrderNo(room.id, orderNo)
+            ?: throw BusinessException(ErrorCode.NOT_FOUND, "출제할 문항이 없습니다.")
+        val question = questions.first { it.orderNo == orderNo }
+
+        sq.start()
+        room.advanceQuestion(orderNo)
+
+        // 정답·해설은 싣지 않는다 — 마감할 때 처음 나간다
+        eventPublisher.toRoom(
+            room.id,
+            SessionEventType.QUESTION_STARTED,
+            QuestionStartedPayload(
+                sessionQuestionId = sq.id,
+                questionId = question.id,
+                orderNo = orderNo,
+                totalCount = questions.size,
+                type = question.type,
+                content = question.content,
+                choices = question.choices,
+                points = question.points,
+                timeLimitSec = sq.timeLimitSec,
+                endsAt = requireNotNull(sq.endsAt),
+            ),
+        )
+    }
+
+    private fun closeQuestion(sq: SessionQuestion, questions: List<Question>) {
+        val stat = roomStateRepository.findSubmissionStat(sq.id)
+        sq.end(stat.submitCount, stat.correctCount, stat.distribution)
+        val question = questions.firstOrNull { it.id == sq.questionId }
+
+        eventPublisher.toRoom(
+            sq.roomId,
+            SessionEventType.QUESTION_ENDED,
+            QuestionEndedPayload(
+                sessionQuestionId = sq.id,
+                questionId = sq.questionId,
+                orderNo = sq.orderNo,
+                answer = question?.answer,
+                explanation = question?.explanation,
+                submitCount = sq.submitCount,
+                correctCount = sq.correctCount,
+                correctRate = sq.correctRate?.toDouble() ?: 0.0,
+                distribution = stat.distribution,
+            ),
+        )
+        eventPublisher.toRoom(sq.roomId, SessionEventType.RANKING_UPDATED, sessionQueryService.ranking(sq.roomId))
+    }
+
+    private fun currentRunning(roomId: Long): SessionQuestion? =
+        sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(roomId).firstOrNull { it.isRunning }
+
+    private fun questionSet(room: Room, hostUserId: Long): Pair<Long, List<Question>> {
+        val setId = room.questionSetId ?: throw BusinessException(ErrorCode.QUESTION_SET_REQUIRED)
+        return setId to questionSetQueryService.getDetail(setId, hostUserId).second
+    }
+
+    private fun ownedRoom(roomId: Long, hostUserId: Long): Room {
+        val room = roomRepository.findById(roomId)
+            .orElseThrow { BusinessException(ErrorCode.ROOM_NOT_FOUND) }
+        room.verifyHost(hostUserId)
+        return room
+    }
+}
