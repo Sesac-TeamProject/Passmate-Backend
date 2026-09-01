@@ -30,6 +30,21 @@ class ParticipantQueryService(
     }
 
     /**
+     * 방에 들어왔던 사람 전부(나간 사람 포함). 결과·리포트가 쓴다 —
+     * 중도 이탈자도 낸 답안과 점수가 있어서 목록에서 빼면 합계가 어긋난다.
+     */
+    fun listAll(roomId: Long): List<Participant> {
+        verifyRoomExists(roomId)
+        return participantRepository.findAllByRoomIdOrderByJoinedAtAsc(roomId)
+    }
+
+    /** 그 방의 참가자 한 명. 다른 방 참가자 id 로는 찾히지 않는다. */
+    fun getOfRoom(roomId: Long, participantId: Long): Participant =
+        participantRepository.findById(participantId)
+            .filter { it.roomId == roomId }
+            .orElseThrow { BusinessException(ErrorCode.PARTICIPANT_NOT_FOUND) }
+
+    /**
      * 닉네임은 방 안에서만 유일하다(uk_participant_nickname).
      * 이미 쓰이고 있으면 뒤에 숫자를 붙여 비어 있는 것을 최대 3개 제안한다.
      */
