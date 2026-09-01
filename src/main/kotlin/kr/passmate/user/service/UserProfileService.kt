@@ -3,6 +3,7 @@ package kr.passmate.user.service
 import kr.passmate.coin.service.CoinWalletService
 import kr.passmate.room.service.RoomStatsService
 import kr.passmate.user.dto.MyProfileResponse
+import kr.passmate.user.dto.UserProfileUpdateRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -17,6 +18,18 @@ class UserProfileService(
     private val roomStatsService: RoomStatsService,
     private val coinWalletService: CoinWalletService,
 ) {
+
+    /** 닉네임·프로필 이미지·기본 캐릭터를 고치고 바뀐 프로필을 그대로 돌려준다. */
+    @Transactional
+    fun updateMyProfile(userId: Long, request: UserProfileUpdateRequest): MyProfileResponse {
+        userService.updateProfile(
+            userId = userId,
+            nickname = request.nickname,
+            profileImageUrl = request.profileImageUrl,
+            defaultAvatarId = request.defaultAvatarId,
+        )
+        return getMyProfile(userId)
+    }
 
     fun getMyProfile(userId: Long): MyProfileResponse {
         val user = userService.getActiveUser(userId)

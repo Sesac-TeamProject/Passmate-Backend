@@ -27,7 +27,13 @@ interface RoomRepository : JpaRepository<Room, Long> {
     @Query("select r from Room r where r.id = :id")
     fun findByIdForUpdate(@Param("id") id: Long): Room?
 
+    /** 내가 만든 방 전부(최근 만든 순). 마이페이지 목록이 쓴다. */
+    fun findAllByHostUserIdOrderByIdDesc(hostUserId: Long): List<Room>
+
     fun countByHostUserId(hostUserId: Long): Long
+
+    /** 아직 안 끝난 내 방이 있는지. 탈퇴를 막는 조건이다. */
+    fun existsByHostUserIdAndStatusIn(hostUserId: Long, statuses: Collection<RoomStatus>): Boolean
 
     fun countByHostUserIdAndStatus(hostUserId: Long, status: RoomStatus): Long
 

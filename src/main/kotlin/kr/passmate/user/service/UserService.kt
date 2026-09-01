@@ -46,6 +46,11 @@ class UserService(
         return outcome
     }
 
+    /** 마이페이지에서 고친 프로필을 반영한다. 탈퇴·정지 계정은 getActiveUser 가 막는다. */
+    @Transactional
+    fun updateProfile(userId: Long, nickname: String, profileImageUrl: String?, defaultAvatarId: String?): User =
+        getActiveUser(userId).apply { updateProfile(nickname, profileImageUrl, defaultAvatarId) }
+
     @Transactional(readOnly = true)
     fun getActiveUser(userId: Long): User {
         val user = userRepository.findById(userId).orElseThrow {

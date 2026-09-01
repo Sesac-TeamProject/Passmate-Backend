@@ -18,6 +18,8 @@ import kr.passmate.session.repository.SessionQuestionRepository
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.LocalDateTime
 
 /**
@@ -101,6 +103,7 @@ class SessionService(
         currentRunning(roomId)?.let { closeQuestion(it, questions) }
 
         room.close()
+        recordRoomResult(room)
         eventPublisher.toRoom(roomId, SessionEventType.SESSION_ENDED, sessionQueryService.ranking(roomId))
 
         // 개인 학습 리포트는 report 기능이 만든다. 직접 부르면 session ⇄ report 순환이라 이벤트로 끊는다
@@ -188,6 +191,24 @@ class SessionService(
             ),
         )
         eventPublisher.toRoom(sq.roomId, SessionEventType.RANKING_UPDATED, sessionQueryService.ranking(sq.roomId))
+    }
+
+    /**
+     * 방의 평균 점수·정답률을 한 번 계산해 박아 둔다.
+     * 마이페이지 "내가 만든 방" 목록이 방마다 답안을 다시 세지 않게 하려는 값이다.
+     */
+    private fun recordRoomResult(room: Room) {
+        val questions = sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(room.id)
+        val submitCount = questions.sumOf { it.submitCount }
+        val correctCount = questions.sumOf { it.correctCount }
+        val totalScore = roomStateRepository.findRanking(room.id).sumOf { it.totalScore }
+
+        room.recordResult(
+            avgScore = if (room.participantCount == 0) BigDecimal.ZERO
+            else BigDecimal(totalScore.toDouble() / room.participantCount).setScale(2, RoundingMode.HALF_UP),
+            correctRate = if (submitCount == 0) BigDecimal.ZERO
+            else BigDecimal(correctCount * 100.0 / submitCount).setScale(2, RoundingMode.HALF_UP),
+        )
     }
 
     private fun currentRunning(roomId: Long): SessionQuestion? =
