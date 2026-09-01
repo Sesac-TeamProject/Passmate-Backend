@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.MvcResult
@@ -33,7 +34,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * 개인 학습 리포트.
+ * 개인 학습 리포트와 방 리포트 CSV 내보내기.
  *
  * 문항 두 개에 각각 다른 주제를 달아 두고, 학생이 하나만 맞히게 해서
  * 취약 주제가 제대로 걸러지는지 본다.
@@ -142,6 +143,43 @@ class LearningReportIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.weakTopics.length()").value(2))
     }
 
+    @Test
+    fun `호스트는 방 리포트를 CSV 로 내려받는다`() {
+        runSession()
+
+        val response = export(hostToken, "csv").andExpect(status().isOk).andReturn().response
+        val csv = String(response.contentAsByteArray, Charsets.UTF_8)
+
+        assertThat(response.getHeader(HttpHeaders.CONTENT_DISPOSITION))
+            .contains("attachment", "passmate-room-$roomId-report.csv")
+        // 엑셀이 UTF-8 을 알아보게 BOM 을 붙인다
+        assertThat(csv.first()).isEqualTo('﻿')
+        assertThat(csv).contains("PassMate 방 리포트", "문항별", "학생별")
+        assertThat(csv).contains("리포트 방")
+        assertThat(csv).contains("학생")
+        // 쉼표가 없는 값은 따옴표로 감싸지 않는다
+        assertThat(csv).contains("참가자 수,2")
+    }
+
+    @Test
+    fun `csv 가 아닌 형식은 무엇이 되는지 알려 주고 막는다`() {
+        runSession()
+
+        export(hostToken, "pdf")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+            .andExpect(jsonPath("$.message").value("지금은 csv 로만 내보낼 수 있습니다."))
+    }
+
+    @Test
+    fun `호스트가 아니면 내보낼 수 없다`() {
+        runSession()
+
+        export(studentToken, "csv")
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("NOT_ROOM_HOST"))
+    }
+
     // ---------- helpers ----------
 
     /** 학생이 1번은 맞히고 2번은 틀린다. 게스트는 아무것도 내지 않는다. */
@@ -175,6 +213,9 @@ class LearningReportIntegrationTest : IntegrationTestSupport() {
 
     private fun myReport(token: String): ResultActions =
         mockMvc.perform(get("/rooms/{id}/reports/me", roomId).header(AUTH, bearer(token)))
+
+    private fun export(token: String, format: String): ResultActions =
+        mockMvc.perform(get("/rooms/{id}/reports/export", roomId).param("format", format).header(AUTH, bearer(token)))
 
     private fun member(key: String): Long =
         userService.loginOrRegister(AuthProvider.GOOGLE, key, "$key@example.com", key, null).user.id
