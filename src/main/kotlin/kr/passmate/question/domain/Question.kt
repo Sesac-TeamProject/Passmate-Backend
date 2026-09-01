@@ -59,7 +59,7 @@ class Question(
 
     @Enumerated(EnumType.STRING)
     @Column(name = "source", nullable = false, length = 10)
-    val source: QuestionSource,
+    var source: QuestionSource,
 ) : BaseTimeEntity() {
 
     init {
@@ -101,6 +101,32 @@ class Question(
 
     fun changeOrder(orderNo: Int) {
         this.orderNo = orderNo
+    }
+
+    /**
+     * AI 재생성 결과로 내용을 갈아끼운다. **순서·배점·제한시간·주제는 그대로 둔다** —
+     * "같은 조건으로 다시" 가 재생성의 뜻이라 문항이 세트 안에서 차지하는 자리는 유지해야 한다.
+     */
+    fun regenerateByAi(
+        type: QuestionType,
+        content: String,
+        choices: List<String>?,
+        answer: String?,
+        explanation: String?,
+        difficulty: Difficulty?,
+    ) {
+        edit(
+            type = type,
+            content = content,
+            choices = choices,
+            answer = answer,
+            explanation = explanation,
+            topic = this.topic,
+            difficulty = difficulty,
+            timeLimitSec = this.timeLimitSec,
+            points = this.points,
+        )
+        this.source = QuestionSource.AI
     }
 
     /** 유형별 필수 조건. 어긋나면 400 으로 막는다. */
