@@ -60,7 +60,9 @@ passmate:
     entry-fee-min: 100                 # 참가비 하한 (코인, 1 C = 1원)
     entry-fee-max: 10000               # 참가비 상한
     settlement-min-amount: 10000       # 최소 정산액 (원)
-    ai-free-limit: 3                   # 월 AI 세트 생성 무료 횟수
+    ai-free-limit: 3                   # 월 AI 세트 생성 무료 횟수 (호스트)
+    essay-analysis-free-limit: 5       # 월 서술형 AI 분석 무료 횟수 (학생, FR-075)
+    essay-analysis-coin-cost: 100      # 무료 한도 초과 시 분석 1건당 차감 코인 (1 C = 1원)
     rating-window-hours: 24            # 종료 후 평가 가능 시간
     host-earning-rate: 0.8             # 호스트 수익 배분율 (80:20)
     guest-retention-days: 7            # 게스트 기록 보관 일수
@@ -72,8 +74,19 @@ passmate:
     bucket: ${S3_BUCKET}
     region: ${AWS_REGION:ap-northeast-2}
   ai:
-    model: ${LLM_MODEL:claude-opus-5}
-    api-key: ${ANTHROPIC_API_KEY:}
+    # 제공자는 OpenAI (2026-08-31 결정). 모델은 env 로만 주입하고 코드에 박지 않는다
+    provider: openai
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    api-key: ${OPENAI_API_KEY:}
+    # ⚠️ 지금 값은 "연동·출력 확인용 잠정값"이다. 운영 전에 다시 정한다.
+    # gpt-4(원조)·gpt-4-turbo 는 Structured Outputs(json_schema strict)를 지원하지 않아
+    # 우리가 실제로 쓸 경로를 검증하지 못한다. 4 계열 중에서는 gpt-4o-mini 부터 지원한다.
+    # 문제 생성 — 동기 30초 SLA, Structured Outputs 로 형식을 강제한다
+    generation-model: ${LLM_GENERATION_MODEL:gpt-4o-mini}
+    # 서술형 분석 — 문항 × 참가자 수만큼 불리므로 가장 싼 축으로 둔다
+    analysis-model: ${LLM_ANALYSIS_MODEL:gpt-4o-mini}
+    # 추론 강도. 문제 생성은 30초 안에 끝나야 해서 낮게 둔다
+    reasoning-effort: ${LLM_REASONING_EFFORT:low}
     timeout-seconds: 30
     max-concurrent-analysis: 4
   portone:

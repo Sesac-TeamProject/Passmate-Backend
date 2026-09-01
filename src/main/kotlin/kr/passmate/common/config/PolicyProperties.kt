@@ -14,8 +14,12 @@ data class PolicyProperties(
     val entryFeeMax: Int,
     /** 최소 정산 신청 금액 (원) */
     val settlementMinAmount: Int,
-    /** 월 AI 문제 세트 생성 무료 횟수 */
+    /** 월 AI 문제 세트 생성 무료 횟수 (호스트) */
     val aiFreeLimit: Int,
+    /** 월 서술형 AI 분석 무료 횟수 (학생, FR-075) */
+    val essayAnalysisFreeLimit: Int,
+    /** 무료 한도를 넘겼을 때 분석 1건당 차감할 코인 (1 C = 1원) */
+    val essayAnalysisCoinCost: Int,
     /** 세션 종료 후 별점·평가 가능 시간 */
     val ratingWindowHours: Long,
     /** 호스트 수익 배분율 (0.8 = 80:20) */
