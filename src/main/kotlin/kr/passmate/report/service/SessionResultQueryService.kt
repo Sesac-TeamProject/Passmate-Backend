@@ -3,7 +3,6 @@ package kr.passmate.report.service
 import kr.passmate.common.security.AuthPrincipal
 import kr.passmate.feedback.dto.AnswerFeedbackView
 import kr.passmate.feedback.service.AnswerFeedbackQueryService
-import kr.passmate.question.domain.Question
 import kr.passmate.rating.service.RoomRatingQueryService
 import kr.passmate.report.dto.AnswerResultView
 import kr.passmate.report.dto.MySessionResultResponse
@@ -12,14 +11,11 @@ import kr.passmate.report.dto.ParticipantResultRow
 import kr.passmate.report.dto.QuestionResultRow
 import kr.passmate.report.dto.ResultSummary
 import kr.passmate.report.dto.SessionResultsResponse
-import kr.passmate.room.domain.Participant
 import kr.passmate.room.domain.Room
 import kr.passmate.room.service.ParticipantQueryService
 import kr.passmate.room.service.RoomQueryService
 import kr.passmate.session.domain.Answer
-import kr.passmate.session.domain.SessionQuestion
 import kr.passmate.session.service.AnswerQueryService
-import kr.passmate.session.service.SessionQueryService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -27,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional
  * 세션 결과 조회 (FR-030 · FR-031 · FR-034).
  *
  * 세 화면(방 리포트·내 결과·학생별 상세)이 같은 재료를 다르게 자른다.
- * 그래서 방 단위 재료를 **한 번에 모아 두고**([Materials]) 각 응답을 거기서 만든다 —
+ * 그래서 방 단위 재료를 **한 번에 모아 두고**([SessionMaterials]) 각 응답을 거기서 만든다 —
  * 화면마다 따로 읽으면 참가자 수 × 문항 수만큼 쿼리가 늘어난다.
  */
 @Service
@@ -35,8 +31,8 @@ import org.springframework.transaction.annotation.Transactional
 class SessionResultQueryService(
     private val roomQueryService: RoomQueryService,
     private val participantQueryService: ParticipantQueryService,
-    private val sessionQueryService: SessionQueryService,
     private val answerQueryService: AnswerQueryService,
+    private val materialsLoader: SessionMaterialsLoader,
     private val answerFeedbackQueryService: AnswerFeedbackQueryService,
     private val roomRatingQueryService: RoomRatingQueryService,
 ) {
@@ -45,7 +41,7 @@ class SessionResultQueryService(
     fun sessionResults(roomId: Long, hostUserId: Long): SessionResultsResponse {
         val room = roomQueryService.getRoom(roomId)
         room.verifyHost(hostUserId)
-        val m = gather(room)
+        val m = materialsLoader.load(room)
 
         val analyzedByAnswer = answerFeedbackQueryService.viewsOf(m.answers.map { it.id })
 
@@ -86,15 +82,14 @@ class SessionResultQueryService(
             ),
             questions = questionRows,
             participants = m.participants.map { participant ->
-                val answers = m.answersByParticipant[participant.id].orEmpty()
                 ParticipantResultRow(
                     rank = m.rankOf(participant.id),
                     participantId = participant.id,
                     nickname = participant.nickname,
                     avatarId = participant.avatarId,
                     totalScore = m.scoreOf(participant.id),
-                    correctCount = answers.count { it.isCorrect == true },
-                    submitCount = answers.size,
+                    correctCount = m.correctCountOf(participant.id),
+                    submitCount = m.answersOf(participant.id).size,
                 )
             }.sortedBy { it.rank },
         )
@@ -105,8 +100,8 @@ class SessionResultQueryService(
         val room = roomQueryService.getRoom(roomId)
         val participantId = answerQueryService.resolveParticipantId(roomId, principal)
         val participant = participantQueryService.getOfRoom(roomId, participantId)
-        val m = gather(room)
-        val answers = m.answersByParticipant[participantId].orEmpty()
+        val m = materialsLoader.load(room)
+        val answers = m.answersOf(participantId)
 
         return MySessionResultResponse(
             roomId = roomId,
@@ -132,8 +127,8 @@ class SessionResultQueryService(
         val room = roomQueryService.getRoom(roomId)
         room.verifyHost(hostUserId)
         val participant = participantQueryService.getOfRoom(roomId, participantId)
-        val m = gather(room)
-        val answers = m.answersByParticipant[participantId].orEmpty()
+        val m = materialsLoader.load(room)
+        val answers = m.answersOf(participantId)
 
         return ParticipantResultResponse(
             roomId = roomId,
@@ -153,7 +148,7 @@ class SessionResultQueryService(
      * 문항 순서대로 한 줄씩. **제출하지 않은 문항도 줄을 만든다** —
      * 빠뜨린 문제를 지우면 학생은 뭘 놓쳤는지 알 수 없다.
      */
-    private fun answerViews(m: Materials, answers: List<Answer>): List<AnswerResultView> {
+    private fun answerViews(m: SessionMaterials, answers: List<Answer>): List<AnswerResultView> {
         val byQuestion = answers.associateBy { it.sessionQuestionId }
         val feedbacks = answerFeedbackQueryService.viewsOf(answers.map { it.id })
 
@@ -182,55 +177,6 @@ class SessionResultQueryService(
         }
     }
 
-    private fun gather(room: Room): Materials {
-        val answers = answerQueryService.listByRoom(room.id)
-        return Materials(
-            sessionQuestions = sessionQueryService.sessionQuestions(room.id),
-            questionsById = sessionQueryService.questionsOf(room).associateBy { it.id },
-            participants = participantQueryService.listAll(room.id),
-            answers = answers,
-        )
-    }
-
     private fun percent(part: Int, whole: Int): Double =
         if (whole == 0) 0.0 else part * 100.0 / whole
-
-    /**
-     * 방 하나 분량의 결과 재료. 점수·순위는 답안에서 바로 계산한다 —
-     * 이미 손에 들고 있는 값이라 랭킹을 따로 조회할 이유가 없고,
-     * 중도 이탈자까지 같은 기준으로 줄을 세울 수 있다.
-     */
-    private class Materials(
-        val sessionQuestions: List<SessionQuestion>,
-        val questionsById: Map<Long, Question>,
-        val participants: List<Participant>,
-        val answers: List<Answer>,
-    ) {
-        val answersByParticipant: Map<Long, List<Answer>> = answers.groupBy { it.participantId }
-        val answersBySessionQuestion: Map<Long, List<Answer>> = answers.groupBy { it.sessionQuestionId }
-
-        /** 보정된 final_score 로 센다 — 서술형은 첨삭 뒤에 값이 바뀐다. */
-        private val scores: Map<Long, Long> =
-            answersByParticipant.mapValues { (_, list) -> list.sumOf { it.finalScore }.toLong() }
-
-        /** 동점은 같은 등수로 묶는다(공동 3등 다음은 5등). 답안이 없는 사람은 0점 공동 꼴등. */
-        private val ranks: Map<Long, Int> = participants
-            .map { it.id to (scores[it.id] ?: 0L) }
-            .sortedWith(compareByDescending<Pair<Long, Long>> { it.second }.thenBy { it.first })
-            .let { rows ->
-                var rank = 0
-                var prev: Long? = null
-                rows.mapIndexed { index, (participantId, score) ->
-                    if (score != prev) {
-                        rank = index + 1
-                        prev = score
-                    }
-                    participantId to rank
-                }
-            }
-            .toMap()
-
-        fun scoreOf(participantId: Long): Long = scores[participantId] ?: 0L
-        fun rankOf(participantId: Long): Int = ranks[participantId] ?: 0
-    }
 }
