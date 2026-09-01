@@ -3,6 +3,8 @@ package kr.passmate.support
 import kr.passmate.ai.client.AiCallException
 import kr.passmate.ai.client.AiGenerationRequest
 import kr.passmate.ai.client.AiGenerationResult
+import kr.passmate.ai.client.EssayAnalysisRequest
+import kr.passmate.ai.client.EssayAnalysisResult
 import kr.passmate.ai.client.GeneratedQuestion
 import kr.passmate.ai.client.OpenAiClient
 import kr.passmate.question.domain.QuestionType
@@ -22,9 +24,18 @@ class FakeOpenAiClient : OpenAiClient {
     var lastRequest: AiGenerationRequest? = null
         private set
 
+    /** 서술형 분석 호출 횟수. 자동 실행이 아니라 요청할 때만 도는지 세는 데 쓴다 */
+    var analysisCallCount: Int = 0
+        private set
+
+    var lastAnalysisRequest: EssayAnalysisRequest? = null
+        private set
+
     private var failuresLeft: Int = 0
     private var failureRetryable: Boolean = true
     private var scripted: List<GeneratedQuestion>? = null
+    private var analysisFailuresLeft: Int = 0
+    private var analysisFailureRetryable: Boolean = true
 
     /** 앞선 [times] 번 호출을 실패시킨다. [retryable] = false 면 재시도 대상이 아니다. */
     fun failTimes(times: Int, retryable: Boolean = true) {
@@ -37,12 +48,41 @@ class FakeOpenAiClient : OpenAiClient {
         scripted = questions
     }
 
+    /** 앞선 [times] 번 분석 호출을 실패시킨다. 환급 경로를 확인할 때 쓴다. */
+    fun failAnalysisTimes(times: Int, retryable: Boolean = true) {
+        analysisFailuresLeft = times
+        analysisFailureRetryable = retryable
+    }
+
     fun reset() {
         callCount = 0
         lastRequest = null
         failuresLeft = 0
         failureRetryable = true
         scripted = null
+        analysisCallCount = 0
+        lastAnalysisRequest = null
+        analysisFailuresLeft = 0
+        analysisFailureRetryable = true
+    }
+
+    override fun analyzeEssay(request: EssayAnalysisRequest): EssayAnalysisResult {
+        analysisCallCount++
+        lastAnalysisRequest = request
+
+        if (analysisFailuresLeft > 0) {
+            analysisFailuresLeft--
+            throw AiCallException("테스트용 분석 실패", retryable = analysisFailureRetryable)
+        }
+
+        return EssayAnalysisResult(
+            keyPoints = listOf("핵심을 짚었습니다"),
+            missingPoints = listOf("근거가 부족합니다"),
+            suggestions = listOf("예시를 하나 덧붙여 보세요"),
+            summary = "전반적으로 방향은 맞습니다.",
+            model = FAKE_MODEL,
+            durationMs = 1,
+        )
     }
 
     override fun generateQuestions(request: AiGenerationRequest): AiGenerationResult {

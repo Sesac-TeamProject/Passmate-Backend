@@ -60,5 +60,6 @@ enum class ErrorCode(val status: HttpStatus, val message: String) {
     // 500 / 502
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다."),
     AI_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "AI 문제 생성에 실패했습니다. 다시 시도해 주세요."),
+    AI_ANALYSIS_FAILED(HttpStatus.BAD_GATEWAY, "AI 답변 분석에 실패했습니다. 다시 시도해 주세요."),
     EXTERNAL_API_ERROR(HttpStatus.BAD_GATEWAY, "외부 서비스 호출에 실패했습니다."),
 }
