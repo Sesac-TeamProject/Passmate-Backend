@@ -73,6 +73,8 @@ class SecurityConfig(
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/v3/api-docs/**",
+            // WebSocket 핸드셰이크는 HTTP 필터를 통과시키고, 인증은 STOMP CONNECT 프레임에서 한다.
+            // 브라우저 WebSocket 은 커스텀 헤더를 못 붙여 Authorization 을 핸드셰이크에 실을 수 없다
             "/ws/**",
             "/auth/**",
             "/webhooks/**",
