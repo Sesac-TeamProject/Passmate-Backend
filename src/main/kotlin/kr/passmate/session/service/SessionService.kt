@@ -11,6 +11,7 @@ import kr.passmate.session.domain.SessionEventType
 import kr.passmate.session.domain.SessionQuestion
 import kr.passmate.session.dto.QuestionEndedPayload
 import kr.passmate.session.dto.QuestionStartedPayload
+import kr.passmate.session.dto.ScreenLockPayload
 import kr.passmate.session.repository.RoomStateRepository
 import kr.passmate.session.repository.SessionQuestionRepository
 import org.springframework.stereotype.Service
@@ -98,6 +99,23 @@ class SessionService(
 
         room.close()
         eventPublisher.toRoom(roomId, SessionEventType.SESSION_ENDED, sessionQueryService.ranking(roomId))
+    }
+
+    /**
+     * 학생 화면을 잠그거나 푼다(FR-062). 진행 중일 때만 — 잠금은 "지금 나를 보라"는 신호라
+     * 세션이 돌고 있지 않으면 뜻이 없다.
+     *
+     * 잠금은 서버 상태다. 브로드캐스트는 화면을 덮으라는 알림일 뿐이고,
+     * 실제 제출 차단은 AnswerService 가 room.screenLocked 를 보고 막는다 —
+     * 클라이언트가 이벤트를 무시해도 답안은 들어가지 않는다.
+     */
+    @Transactional
+    fun lockScreen(roomId: Long, hostUserId: Long, locked: Boolean): Room {
+        val room = ownedRoom(roomId, hostUserId)
+        room.verifyRunning()
+        room.lockScreen(locked)
+        eventPublisher.toRoom(roomId, SessionEventType.SCREEN_LOCKED, ScreenLockPayload(locked))
+        return room
     }
 
     /**

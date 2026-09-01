@@ -46,6 +46,7 @@ enum class ErrorCode(val status: HttpStatus, val message: String) {
     SESSION_NOT_RUNNING(HttpStatus.CONFLICT, "진행 중인 세션이 아닙니다."),
     QUESTION_NOT_RUNNING(HttpStatus.CONFLICT, "지금 풀 수 있는 문항이 아닙니다."),
     ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 제출한 문항입니다."),
+    SCREEN_LOCKED(HttpStatus.CONFLICT, "화면이 잠겨 있어 지금은 답안을 낼 수 없습니다."),
     SESSION_ALREADY_FINISHED(HttpStatus.CONFLICT, "모든 문항이 끝났습니다."),
     QUESTION_SET_REQUIRED(HttpStatus.CONFLICT, "확정된 문제 세트를 먼저 연결해 주세요."),
     NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),

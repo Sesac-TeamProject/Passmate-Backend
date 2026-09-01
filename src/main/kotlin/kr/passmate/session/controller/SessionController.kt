@@ -10,6 +10,8 @@ import kr.passmate.session.dto.AnswerResponse
 import kr.passmate.session.dto.AnswerSubmitRequest
 import kr.passmate.session.dto.QuestionResultResponse
 import kr.passmate.session.dto.RankingEntry
+import kr.passmate.session.dto.ScreenLockRequest
+import kr.passmate.session.dto.ScreenLockResponse
 import kr.passmate.session.dto.SessionSnapshotResponse
 import kr.passmate.session.dto.SubmissionStatusPayload
 import kr.passmate.session.service.AnswerService
@@ -19,6 +21,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -62,6 +65,20 @@ class SessionController(
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun end(@CurrentUser principal: UserPrincipal, @PathVariable roomId: Long) =
         sessionService.end(roomId, principal.userId)
+
+    @Operation(
+        summary = "학생 화면 잠금/해제",
+        description = "잠금 중에는 답안 제출이 막히고 전 참가자에게 SCREEN_LOCKED 가 나간다. 호스트만.",
+    )
+    @PutMapping("/lock")
+    fun lock(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable roomId: Long,
+        @Valid @RequestBody request: ScreenLockRequest,
+    ): ScreenLockResponse {
+        val room = sessionService.lockScreen(roomId, principal.userId, request.locked)
+        return ScreenLockResponse(roomId = room.id, screenLocked = room.screenLocked)
+    }
 
     @Operation(
         summary = "세션 상태 조회",

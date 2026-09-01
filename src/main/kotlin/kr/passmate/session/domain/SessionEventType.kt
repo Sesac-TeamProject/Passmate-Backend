@@ -21,6 +21,9 @@ enum class SessionEventType {
     /** 제출 현황(호스트 전용 토픽) */
     SUBMISSION_UPDATED,
 
+    /** 학생 화면 잠금/해제 — 잠금 중에는 답안 제출이 막힌다 */
+    SCREEN_LOCKED,
+
     SESSION_ENDED,
 
     PARTICIPANT_JOINED,

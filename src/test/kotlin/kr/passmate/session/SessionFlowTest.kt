@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.MvcResult
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.transaction.annotation.Transactional
@@ -228,6 +229,57 @@ class SessionFlowTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `화면을 잠그면 답안을 낼 수 없고 풀면 다시 낼 수 있다`() {
+        start()
+
+        lock(true)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.screenLocked").value(true))
+
+        submit(guestToken, mcqId, "찾을 수 없음")
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("SCREEN_LOCKED"))
+
+        lock(false)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.screenLocked").value(false))
+
+        submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+    }
+
+    @Test
+    fun `잠금 여부는 세션 스냅샷에 실린다`() {
+        start()
+        lock(true).andExpect(status().isOk)
+
+        snapshot(guestToken)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.screenLocked").value(true))
+    }
+
+    @Test
+    fun `호스트가 아니면 화면을 잠글 수 없다`() {
+        start()
+        val other = jwtTokenProvider.issue(member("lock-other"), false).accessToken
+
+        mockMvc.perform(
+            put("/rooms/{id}/session/lock", roomId)
+                .header("Authorization", "Bearer $other")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(mapOf("locked" to true))),
+        )
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("NOT_ROOM_HOST"))
+    }
+
+    @Test
+    fun `진행 중이 아니면 화면을 잠글 수 없다`() {
+        lock(true)
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("SESSION_NOT_RUNNING"))
+    }
+
+    @Test
     fun `세션을 종료하면 방이 닫힌다`() {
         start()
         mockMvc.perform(post("/rooms/{id}/session/end", roomId).header("Authorization", "Bearer $hostToken"))
@@ -246,6 +298,13 @@ class SessionFlowTest : IntegrationTestSupport() {
 
     private fun endCurrent() = mockMvc.perform(post("/rooms/{id}/session/current/end", roomId).header("Authorization", "Bearer $hostToken"))
         .andExpect(status().isNoContent)
+
+    private fun lock(locked: Boolean) = mockMvc.perform(
+        put("/rooms/{id}/session/lock", roomId)
+            .header("Authorization", "Bearer $hostToken")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(mapOf("locked" to locked))),
+    )
 
     private fun snapshot(token: String) =
         mockMvc.perform(get("/rooms/{id}/session", roomId).header("Authorization", "Bearer $token"))
