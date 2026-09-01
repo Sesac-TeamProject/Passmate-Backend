@@ -21,3 +21,6 @@ passmate:
     secret: ${JWT_SECRET:local-dev-secret-key-please-change-this-to-at-least-32-bytes}
   storage:
     bucket: ${S3_BUCKET:passmate-local}
+  cors:
+    # 로컬은 프런트 개발 서버 포트가 유동적이라(Vite 5173 · Next 3000 …) 와일드카드로 연다
+    allowed-origins: http://localhost:*,http://127.0.0.1:*

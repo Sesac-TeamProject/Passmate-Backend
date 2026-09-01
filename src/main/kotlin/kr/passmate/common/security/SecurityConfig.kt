@@ -24,6 +24,7 @@ class SecurityConfig(
     private val jwtAuthenticationFilter: JwtAuthenticationFilter,
     private val authenticationEntryPoint: JwtAuthenticationEntryPoint,
     private val accessDeniedHandler: JwtAccessDeniedHandler,
+    private val corsProperties: CorsProperties,
 ) {
 
     @Bean
@@ -59,11 +60,13 @@ class SecurityConfig(
             registerCorsConfiguration(
                 "/**",
                 CorsConfiguration().apply {
-                    allowedOriginPatterns = listOf("http://localhost:*", "https://*.passmate.app")
-                    allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                    // 운영 도메인은 WEB_BASE_URL 에서 온다(CorsProperties). 코드에 박지 않는다 —
+                    // 도메인이 바뀌어도 설정값 교체 + 재배포로 끝나야 한다
+                    allowedOriginPatterns = corsProperties.originPatterns
+                    allowedMethods = corsProperties.allowedMethods
                     allowedHeaders = listOf("*")
                     allowCredentials = true
-                    maxAge = 3600
+                    maxAge = corsProperties.maxAgeSeconds
                 },
             )
         }
