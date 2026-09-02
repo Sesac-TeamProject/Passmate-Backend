@@ -27,24 +27,29 @@ systemctl list-timers | grep certbot
 
 인증서가 없으면 `deploy.sh` 가 시작 단계에서 멈춘다 — nginx 가 뜨지 못하기 때문이다.
 
-## Swagger Basic Auth
+## Swagger
 
-`api.passmate.kr/swagger-ui.html` 은 웹·앱 팀 연동용으로 열어 두되, 인터넷에 그대로
-노출하지 않는다(엔드포인트·요청 스키마가 전부 공개된다). nginx 가 Basic Auth 로 가린다.
+`https://api.passmate.kr/swagger-ui.html` 은 **인증 없이 열려 있다.** 웹·앱 팀이 API 를
+붙이는 동안 문서가 계속 필요하고, 이 서버의 데이터는 테스트용 방·문제뿐이라
+접근 제한보다 연동 속도를 택했다(2026-09-02 결정).
 
-계정은 SSM `/passmate/prod/SWAGGER_HTPASSWD` 에 **`user:해시` 한 줄**로 넣는다.
-`deploy.sh` 가 매 배포마다 `nginx/.htpasswd` 로 써서 컨테이너에 마운트한다.
+`/v3/api-docs` 는 OpenAPI JSON 이라 앱 팀의 클라이언트 코드 생성에 그대로 쓸 수 있다.
 
-```bash
-# 해시 생성 (평문 비밀번호는 히스토리에 남지 않게 read 로 받는다)
-read -rs -p "Swagger 비밀번호: " PW; echo
-docker run --rm httpd:2.4-alpine htpasswd -nbB passmate "$PW"
-unset PW
+**잠가야 할 상황이 오면**(실사용자 데이터가 들어가거나 스캐너 트래픽이 거슬리면)
+nginx 에 아래 블록을 더한다. `location /` 보다 정규식이 먼저 매칭된다.
+
+```nginx
+location ~ ^/(swagger-ui|v3/api-docs) {
+    auth_basic           "PassMate API Docs";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+    proxy_pass http://app:8080;
+    # ... location / 과 같은 proxy_set_header 들
+}
 ```
 
-**값이 비어 있어도 사이트는 정상 동작한다** — Swagger 만 401 이 된다.
-`deploy.sh` 가 빈 파일이라도 반드시 만드는 이유는, 파일이 없으면 Docker 가 같은 이름의
-디렉터리를 만들어 **nginx 자체가 뜨지 못하기** 때문이다.
+계정 파일은 SSM 에 `SWAGGER_HTPASSWD`(`user:해시` 한 줄)를 넣고 `deploy.sh` 가
+`nginx/.htpasswd` 로 쓰게 한다. ⚠️ 파일이 없으면 Docker 가 같은 이름의 디렉터리를
+만들어 **nginx 자체가 못 뜨므로**, 값이 비어도 빈 파일은 반드시 만들어야 한다.
 
 ## 백업 자동화
 
