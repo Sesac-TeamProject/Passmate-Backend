@@ -71,8 +71,11 @@ passmate:
     access-token-validity-seconds: 3600         # 1시간
     refresh-token-validity-seconds: 1209600     # 14일
   storage:
+    # 자격증명은 여기 없다 — 운영은 EC2 인스턴스 역할, 로컬은 AWS SDK 기본 체인이 찾는다
     bucket: ${S3_BUCKET}
     region: ${AWS_REGION:ap-northeast-2}
+    presigned-minutes: ${S3_PRESIGNED_MINUTES:30}
+    max-upload-mb: ${S3_MAX_UPLOAD_MB:10}
   ai:
     # 제공자는 OpenAI (2026-08-31 결정). 모델은 env 로만 주입하고 코드에 박지 않는다
     provider: openai
