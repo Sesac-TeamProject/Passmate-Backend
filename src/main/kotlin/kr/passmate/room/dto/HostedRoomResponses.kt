@@ -12,9 +12,9 @@ import java.time.LocalDateTime
  */
 @Schema(description = "호스트 명성 요약")
 data class HostReputation(
-    @field:Schema(description = "호스트 등급. hostlevel 기능 전까지 null")
+    @field:Schema(description = "호스트 등급. 아직 판정된 적 없으면 null")
     val level: Int?,
-    @field:Schema(description = "다음 등급까지 진행률(0~1). hostlevel 기능 전까지 null")
+    @field:Schema(description = "다음 등급까지 진행률(0~1). 최고 등급이거나 미판정이면 null")
     val nextLevelProgress: Double?,
     @field:Schema(description = "방 운영 횟수 — 시작해서 종료까지 간 방만 센다")
     val hostedSessionCount: Long,
