@@ -1,0 +1,25 @@
+# 운영 — EC2 한 대에 MySQL 8 컨테이너가 함께 뜬다(RDS 를 쓰지 않는다, B안).
+# 시크릿은 SSM Parameter Store → deploy.sh 가 .env 로 → 환경변수로 주입한다.
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME:passmate}?characterEncoding=UTF-8&serverTimezone=UTC&rewriteBatchedStatements=true
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 3000
+
+logging:
+  level:
+    root: INFO
+    kr.passmate: INFO
+
+springdoc:
+  # 웹·앱 팀 연동용으로 연다. 인터넷에 그대로 노출하지 않고
+  # Nginx Basic Auth 로 가린다 — deploy/nginx/passmate.conf 의 /swagger-ui · /v3/api-docs
+  swagger-ui:
+    enabled: true
+  api-docs:
+    enabled: true

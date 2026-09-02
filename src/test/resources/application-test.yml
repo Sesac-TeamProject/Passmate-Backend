@@ -1,0 +1,26 @@
+# 통합 테스트 — 데이터소스는 IntegrationTestSupport 의 @DynamicPropertySource 가 주입한다.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+    clean-disabled: false
+
+logging:
+  level:
+    kr.passmate: DEBUG
+    org.testcontainers: INFO
+    org.hibernate.SQL: INFO
+
+passmate:
+  # 테스트에서 실제 OpenAI 를 부르는 일이 없도록 키를 비워 둔다. Client 는 Fake 로 대체한다
+  ai:
+    api-key: ""
+  jwt:
+    secret: test-secret-key-for-integration-tests-at-least-32-bytes
+  storage:
+    bucket: passmate-test
