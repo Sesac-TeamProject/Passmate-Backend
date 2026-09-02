@@ -33,6 +33,9 @@ interface RoomRepository : JpaRepository<Room, Long> {
     fun countByHostUserId(hostUserId: Long): Long
 
     /** 아직 안 끝난 내 방이 있는지. 탈퇴를 막는 조건이다. */
+    /** 아직 안 끝난 방이 이 세트를 물고 있는지. 세트 삭제가 그 방의 출제 근거를 지우지 않게 막는 데 쓴다. */
+    fun existsByQuestionSetIdAndStatusIn(questionSetId: Long, statuses: Collection<RoomStatus>): Boolean
+
     fun existsByHostUserIdAndStatusIn(hostUserId: Long, statuses: Collection<RoomStatus>): Boolean
 
     fun countByHostUserIdAndStatus(hostUserId: Long, status: RoomStatus): Long

@@ -8,9 +8,11 @@ import kr.passmate.question.domain.QuestionSet
 import kr.passmate.question.domain.QuestionSource
 import kr.passmate.question.dto.QuestionRequest
 import kr.passmate.question.dto.QuestionSetCreateRequest
+import kr.passmate.question.dto.QuestionSetDuplicateRequest
 import kr.passmate.question.dto.QuestionSetUpdateRequest
 import kr.passmate.question.repository.QuestionRepository
 import kr.passmate.question.repository.QuestionSetRepository
+import kr.passmate.room.service.RoomQueryService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional
 class QuestionSetService(
     private val questionSetRepository: QuestionSetRepository,
     private val questionRepository: QuestionRepository,
+    private val roomQueryService: RoomQueryService,
 ) {
 
     /** 빈 세트를 만든다. 문항은 이후 직접 추가하거나 AI 로 생성한다. */
@@ -176,6 +179,80 @@ class QuestionSetService(
         set.refreshStats(remaining)
     }
 
+    /**
+     * 세트를 DRAFT 사본으로 복제한다 (FR-014).
+     *
+     * 확정된 세트는 불변이라, 지난 세트를 손봐서 다시 쓰려면 이 길밖에 없다.
+     * 문항은 정답·해설·주제까지 그대로 옮기고 출처(source)도 보존한다 —
+     * AI 가 만든 문항이 복제만으로 "직접 작성"이 되면 검수 이력이 끊긴다.
+     *
+     * DRAFT 도 복제할 수 있다. 확정 전에 갈래를 나눠 두 벌로 만드는 쪽이 자연스럽다.
+     */
+    @Transactional
+    fun duplicate(setId: Long, ownerUserId: Long, request: QuestionSetDuplicateRequest): QuestionSet {
+        val origin = questionSetRepository.findByIdAndDeletedAtIsNull(setId)
+            ?: throw BusinessException(ErrorCode.QUESTION_SET_NOT_FOUND)
+        origin.verifyOwner(ownerUserId)
+
+        val copy = questionSetRepository.save(
+            QuestionSet(
+                ownerUserId = ownerUserId,
+                title = request.title?.trim()?.takeIf { it.isNotBlank() } ?: copiedTitleOf(origin.title),
+                description = origin.description,
+                duplicatedFromId = origin.id,
+            ),
+        )
+
+        val questions = questionRepository.findAllBySetIdOrderByOrderNoAsc(setId).map { origin ->
+            Question(
+                setId = copy.id,
+                orderNo = origin.orderNo,
+                type = origin.type,
+                content = origin.content,
+                choices = origin.choices,
+                answer = origin.answer,
+                explanation = origin.explanation,
+                topic = origin.topic,
+                difficulty = origin.difficulty,
+                timeLimitSec = origin.timeLimitSec,
+                points = origin.points,
+                source = origin.source,
+            )
+        }
+        questionRepository.saveAll(questions)
+        copy.refreshStats(questions)
+        return copy
+    }
+
+    /**
+     * 세트를 지운다 (FR-014).
+     *
+     * 물리 삭제는 하지 않는다 — 끝난 방이 `room.question_set_id` 로 이 세트를 참조하고 있어서
+     * 지우면 지난 세션의 출제 근거가 사라진다. 목록에서만 감춘다.
+     *
+     * 아직 안 끝난 방이 물고 있으면 아예 막는다. 감추기만 해도 그 방은 세션을 시작할 수 없게 된다.
+     */
+    @Transactional
+    fun delete(setId: Long, ownerUserId: Long) {
+        val set = questionSetRepository.findByIdAndDeletedAtIsNull(setId)
+            ?: throw BusinessException(ErrorCode.QUESTION_SET_NOT_FOUND)
+        set.verifyOwner(ownerUserId)
+
+        if (roomQueryService.isUsedByActiveRoom(setId)) {
+            throw BusinessException(
+                ErrorCode.CONFLICT,
+                "아직 끝나지 않은 방이 쓰고 있는 세트입니다. 방을 먼저 정리해 주세요.",
+            )
+        }
+        set.delete()
+    }
+
+    /** 제목이 100자 상한에 붙어 있어도 접미사가 잘리지 않게 앞쪽을 줄인다. */
+    private fun copiedTitleOf(title: String): String {
+        val room = TITLE_MAX - COPY_SUFFIX.length
+        return title.take(room) + COPY_SUFFIX
+    }
+
     private fun refreshStats(set: QuestionSet) {
         questionRepository.flush()
         set.refreshStats(questionRepository.findAllBySetIdOrderByOrderNoAsc(set.id))
@@ -225,4 +302,9 @@ class QuestionSetService(
     private fun getQuestion(setId: Long, questionId: Long): Question =
         questionRepository.findByIdAndSetId(questionId, setId)
             ?: throw BusinessException(ErrorCode.QUESTION_NOT_FOUND)
+
+    companion object {
+        private const val TITLE_MAX = 100
+        private const val COPY_SUFFIX = " (복사본)"
+    }
 }
