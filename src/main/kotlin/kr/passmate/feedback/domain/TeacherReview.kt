@@ -16,7 +16,6 @@ import java.time.LocalDateTime
  * "기계가 본 것"을 섞어 읽으면 첨삭의 무게가 사라진다.
  *
  * [adjustedScore] 는 서술형 보정 점수다. 값이 있으면 `answer.final_score` 가 이걸로 바뀐다.
- * 등록·수정 API 는 P3 라 지금은 조회만 한다.
  */
 @Entity
 @Table(name = "teacher_review")
@@ -46,4 +45,17 @@ class TeacherReview(
     @Column(name = "id")
     var id: Long = 0
         protected set
+
+    /**
+     * 다시 첨삭한다(upsert). 답안당 한 장이라 두 번째부터는 행을 늘리지 않고 이 메서드로 덮어쓴다.
+     *
+     * 세 항목 모두 **넘어온 값 그대로** 반영한다 — null 을 "안 바꿈"으로 다루면
+     * 한 번 단 코멘트를 지울 방법이 없어진다.
+     */
+    fun update(comment: String?, adjustedScore: Int?, improvement: String?) {
+        this.comment = comment
+        this.adjustedScore = adjustedScore
+        this.improvement = improvement
+        this.reviewedAt = LocalDateTime.now()
+    }
 }

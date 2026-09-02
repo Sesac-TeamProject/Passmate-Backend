@@ -1,5 +1,6 @@
 package kr.passmate.session.service
 
+import kr.passmate.common.event.AnswerScoreAdjustedEvent
 import kr.passmate.common.event.SessionEndedEvent
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
@@ -7,6 +8,7 @@ import kr.passmate.question.domain.Question
 import kr.passmate.question.domain.QuestionSetStatus
 import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.room.domain.Room
+import kr.passmate.room.domain.RoomStatus
 import kr.passmate.room.repository.RoomRepository
 import kr.passmate.session.domain.SessionEventType
 import kr.passmate.session.domain.SessionQuestion
@@ -16,6 +18,7 @@ import kr.passmate.session.dto.ScreenLockPayload
 import kr.passmate.session.repository.RoomStateRepository
 import kr.passmate.session.repository.SessionQuestionRepository
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -139,6 +142,21 @@ class SessionService(
         val questions = runCatching { questionSetQueryService.getDetail(room.questionSetId!!, room.hostUserId).second }
             .getOrNull() ?: return
         closeQuestion(sq, questions)
+    }
+
+    /**
+     * 첨삭으로 점수가 바뀌면 방 요약(평균 점수)을 다시 박아 둔다.
+     *
+     * `room.avg_score` 는 "내가 만든 방" 목록이 방마다 답안을 다시 세지 않으려고 굳혀 둔 값이다.
+     * 굳혀 둔 이상 원본이 바뀔 때 같이 갱신하지 않으면 목록만 옛 평균을 들고 있게 된다.
+     * 정답률은 자동 채점 결과라 서술형 보정에 흔들리지 않는다.
+     */
+    @EventListener
+    @Transactional
+    fun onAnswerScoreAdjusted(event: AnswerScoreAdjustedEvent) {
+        val room = roomRepository.findById(event.roomId).orElse(null) ?: return
+        if (room.status != RoomStatus.ENDED) return
+        recordRoomResult(room)
     }
 
     // ---------- 내부 ----------

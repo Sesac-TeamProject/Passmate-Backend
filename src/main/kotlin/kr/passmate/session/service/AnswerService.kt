@@ -30,6 +30,20 @@ class AnswerService(
 ) {
 
     /**
+     * 첨삭 결과로 최종 점수를 바꾼다(feedback 기능이 부른다).
+     *
+     * answer 는 session 소유라 다른 기능이 엔티티를 직접 고치지 않고 여기를 통한다.
+     * 잠정 점수(`score`)는 건드리지 않는다 — 채점기가 그때 낸 값은 기록으로 남겨 둔다.
+     */
+    @Transactional
+    fun adjustFinalScore(answerId: Long, finalScore: Int): Answer {
+        val answer = answerRepository.findById(answerId)
+            .orElseThrow { BusinessException(ErrorCode.NOT_FOUND, "답안을 찾을 수 없습니다.") }
+        answer.adjustFinalScore(finalScore)
+        return answer
+    }
+
+    /**
      * 답안을 낸다.
      *
      * 제출 시각은 **서버가 받은 시각**만 쓴다. 클라이언트가 보낸 시각을 믿으면 속도 보너스를 조작할 수 있다.
