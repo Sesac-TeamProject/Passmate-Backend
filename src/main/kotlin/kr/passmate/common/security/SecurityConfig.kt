@@ -47,6 +47,9 @@ class SecurityConfig(
                 // 홈 인기 방·탐색은 게스트도 본다(FR-054). PIN 은 응답에 넣지 않는다
                 it.requestMatchers(HttpMethod.GET, "/rooms/public").permitAll()
                 it.requestMatchers(HttpMethod.GET, "/rooms/pin/*").permitAll()
+                // 광고는 결과 화면·대기실 배너에 뜬다 — 게스트도 봐야 한다(FR-073)
+                it.requestMatchers(HttpMethod.GET, "/ads").permitAll()
+                it.requestMatchers(HttpMethod.POST, "/ads/*/events").permitAll()
                 // 선생님 공개 프로필은 탐색에서 로그인 없이 열린다(FR-066)
                 it.requestMatchers(HttpMethod.GET, "/users/*/profile").permitAll()
                 it.requestMatchers(HttpMethod.GET, "/rooms/*/participants/nickname-check").permitAll()
