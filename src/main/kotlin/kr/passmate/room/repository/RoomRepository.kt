@@ -53,6 +53,32 @@ interface RoomRepository : JpaRepository<Room, Long> {
         endedAt: java.time.LocalDateTime,
     ): Long
 
+    /** 개설한 유료 방 수. 뱃지 "유료 방 첫 개설" 이 쓴다. */
+    fun countByHostUserIdAndType(hostUserId: Long, type: kr.passmate.room.domain.RoomType): Long
+
+    /** 공개된 운영 중·예정 방. 선생님 공개 프로필의 "참여하기" 목록이다. */
+    fun findAllByHostUserIdAndStatusInAndIsPublicTrueOrderByIdDesc(
+        hostUserId: Long,
+        statuses: Collection<RoomStatus>,
+    ): List<Room>
+
+    /**
+     * 세션을 끝낸 날짜들(중복 제거·내림차순). 연속 활동 일수 뱃지가 쓴다 —
+     * 세션 수가 아니라 "며칠 연속인가"라서 날짜 단위로 봐야 한다.
+     */
+    @Query(
+        """
+        select distinct function('date', r.endedAt)
+        from Room r
+        where r.hostUserId = :hostUserId and r.status = :status and r.endedAt is not null
+        order by function('date', r.endedAt) desc
+        """,
+    )
+    fun findEndedDates(
+        @Param("hostUserId") hostUserId: Long,
+        @Param("status") status: RoomStatus,
+    ): List<java.sql.Date>
+
     /** 세션을 한 번이라도 진행한 적 있는 호스트 전부. 등급 판정 배치가 훑는다. */
     @Query(
         """

@@ -4,7 +4,9 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.passmate.common.security.CurrentUser
 import kr.passmate.common.security.UserPrincipal
+import kr.passmate.hostlevel.dto.BadgeCollectionResponse
 import kr.passmate.hostlevel.dto.HostGradeResponse
+import kr.passmate.hostlevel.service.BadgeQueryService
 import kr.passmate.hostlevel.service.HostGradeQueryService
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/users/me")
 class HostGradeController(
     private val hostGradeQueryService: HostGradeQueryService,
+    private val badgeQueryService: BadgeQueryService,
 ) {
 
     @Operation(
@@ -27,4 +30,12 @@ class HostGradeController(
     @GetMapping("/grade")
     fun myGrade(@CurrentUser principal: UserPrincipal): HostGradeResponse =
         hostGradeQueryService.myGrade(principal.userId)
+
+    @Operation(
+        summary = "내 뱃지 조회",
+        description = "뱃지 컬렉션 8종. 못 딴 것도 진행도(예: 12/30)와 함께 내려간다.",
+    )
+    @GetMapping("/badges")
+    fun myBadges(@CurrentUser principal: UserPrincipal): BadgeCollectionResponse =
+        badgeQueryService.myBadges(principal.userId)
 }
