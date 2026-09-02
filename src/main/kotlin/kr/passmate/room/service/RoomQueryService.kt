@@ -17,6 +17,15 @@ class RoomQueryService(
     private val clientProperties: ClientProperties,
 ) {
 
+    /**
+     * 아직 안 끝난 방(대기·진행)이 이 문제 세트를 쓰고 있는지.
+     *
+     * 문제 세트 삭제가 그 방의 출제 근거를 지워 버리면 세션을 시작할 수 없게 된다 —
+     * question 기능이 삭제 전에 여기로 물어본다.
+     */
+    fun isUsedByActiveRoom(questionSetId: Long): Boolean =
+        roomRepository.existsByQuestionSetIdAndStatusIn(questionSetId, PinService.ACTIVE_STATUSES)
+
     fun getRoom(roomId: Long): Room =
         roomRepository.findById(roomId)
             .orElseThrow { BusinessException(ErrorCode.ROOM_NOT_FOUND) }
