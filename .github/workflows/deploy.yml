@@ -1,6 +1,5 @@
-# main 에 머지되면 자동 배포한다(develop → main PR 이 배포 트리거다).
-# 다른 브랜치는 Actions 탭의 `Run workflow` 로 골라서 수동 배포한다 — 지금은 서버가 1대라
-# develop 을 수동으로 올려 팀 연동용으로 쓴다.
+# main 에 머지되면 자동 배포한다(develop → main PR 병합이 배포 트리거다).
+# develop 등 다른 브랜치는 Actions 탭의 `Run workflow` 로 골라서 수동 배포한다.
 #   test → jar 빌드 → arm64 이미지 ECR 푸시 → deploy/ 를 S3 로 동기화 → SSM 으로 EC2 에서 배포
 #
 # 필요한 레포 Secrets: AWS_ROLE_ARN · ECR_REPOSITORY · EC2_INSTANCE_ID · S3_BUCKET
@@ -8,17 +7,15 @@ name: deploy
 
 on:
   push:
-    # main 이 원칙이다(CLAUDE.md — develop → main PR 병합이 배포 트리거).
-    # develop 은 **첫 배포 검증용 임시**다. 파이프라인이 정상 동작하는 것을 확인하면 지운다.
-    # 지금 빼면 배포할 방법이 없다 — workflow_dispatch 는 워크플로 파일이
-    # 기본 브랜치(main)에 있어야 UI 에 나타나는데, main 은 아직 뒤처져 있다
-    branches: [main, develop]
-  # 수동 실행. 브랜치를 골라 배포할 수 있다(main 에 올라간 뒤부터 버튼이 보인다)
+    # main 병합만 자동 배포한다(2026-09-02 결정 — 첫 배포 검증용이던 develop 자동 배포를 뺐다).
+    # develop 을 올려 보고 싶으면 Actions 탭 → deploy → Run workflow 에서 브랜치를 골라 수동 실행한다
+    branches: [main]
+  # 수동 실행. 이 파일이 기본 브랜치(main)에 있어야 버튼이 보인다
   workflow_dispatch:
 
-# 배포가 겹치면 뒤 배포가 앞 배포를 덮어써 상태가 꼬인다. 줄 세운다
+# 서버가 한 대다 — 브랜치가 달라도 배포가 겹치면 deploy.sh 가 서로를 덮어쓴다. 전부 한 줄로 세운다
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: deploy
   cancel-in-progress: false
 
 permissions:
@@ -65,6 +62,10 @@ jobs:
           context: .
           file: docker/Dockerfile.runtime
           platforms: linux/arm64
+          # 단일 플랫폼인데 buildx 는 기본으로 인덱스+증명서까지 밀어 올린다.
+          # 배포 1회에 ECR 항목이 3개가 되고, 그중 2개는 태그가 없어
+          # "최근 10개 유지" 규칙이 사실상 3~4회분밖에 못 남긴다
+          provenance: false
           push: true
           # 태그 = 커밋 SHA. 롤백은 이전 SHA 를 다시 올리는 것으로 끝난다
           tags: ${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
@@ -72,6 +73,15 @@ jobs:
       # compose·nginx 설정 변경도 배포에 따라오게 한다
       - name: deploy/ 를 S3 로 동기화
         run: aws s3 sync deploy/ "s3://${{ secrets.S3_BUCKET }}/deploy/" --delete
+
+      # 태그는 인자가 아니라 SSM 이 원본이다. 프론트(Passmate-Frontend)가 같은 EC2 에
+      # 자기 컨테이너를 따로 배포하는데, 양쪽 모두 상대의 태그를 SSM 에서 다시 읽어 쓰기 때문에
+      # 한쪽 배포가 다른 쪽을 이전 버전으로 되돌리지 않는다
+      - name: 이미지 태그를 SSM 에 기록
+        run: |
+          aws ssm put-parameter --region "${{ env.AWS_REGION }}" \
+            --name /passmate/prod/APP_IMAGE_TAG \
+            --value "${GITHUB_SHA}" --type String --overwrite >/dev/null
 
       - name: EC2 배포 (SSM Run Command)
         run: |
@@ -89,7 +99,7 @@ jobs:
               mkdir -p /opt/passmate; \
               aws s3 sync s3://${{ secrets.S3_BUCKET }}/deploy/ /opt/passmate/ --region ${{ env.AWS_REGION }}; \
               chmod +x /opt/passmate/*.sh; \
-              /opt/passmate/deploy.sh ${{ secrets.ECR_REPOSITORY }} ${GITHUB_SHA}" \
+              /opt/passmate/deploy.sh" \
             --query 'Command.CommandId' --output text)
 
           aws ssm wait command-executed --command-id "$cid" --instance-id "$INSTANCE" || true
