@@ -7,15 +7,16 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
 import kr.passmate.common.domain.BaseCreatedEntity
+import kr.passmate.common.exception.BusinessException
+import kr.passmate.common.exception.ErrorCode
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 
 /**
- * 세션이 끝난 뒤 참가자가 매기는 별점. 방·참가자당 한 번(uk_room_rating)이다.
+ * 세션이 끝난 뒤 참가자가 매기는 별점. 방·참가자당 한 번(uk_room_rating)이고 **수정할 수 없다**(FR-043).
  *
  * [hostUserId] 는 room 을 따라가면 알 수 있지만, 호스트 평균 별점을 뽑을 때마다
  * 방을 조인하지 않도록 비정규화해 둔다(ERD room_rating).
- * 제출 API 는 P3 라 지금은 "이미 평가했는지"만 읽는다.
  */
 @Entity
 @Table(name = "room_rating")
@@ -37,10 +38,10 @@ class RoomRating(
     @Column(name = "stars", nullable = false)
     val stars: Int,
 
-    /** 설명 명확·난이도 적당 같은 다중 선택 태그 */
+    /** 설명 명확·난이도 적당 같은 다중 선택 태그. enum 이름이 JSON 배열로 저장된다 */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "tags")
-    val tags: List<String>? = null,
+    val tags: List<RatingTag>? = null,
 
     /** 한 줄 후기. 호스트에게만 공개한다 */
     @Column(name = "comment", length = COMMENT_MAX)
@@ -53,7 +54,19 @@ class RoomRating(
     var id: Long = 0
         protected set
 
+    init {
+        // DTO 검증을 통과하지 않는 경로(배치·테스트)로도 들어오므로 엔티티에서 한 번 더 막는다
+        if (stars !in STARS_MIN..STARS_MAX) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "별점은 $STARS_MIN~$STARS_MAX 사이여야 합니다.")
+        }
+        if ((comment?.length ?: 0) > COMMENT_MAX) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "한 줄 후기는 ${COMMENT_MAX}자를 넘을 수 없습니다.")
+        }
+    }
+
     companion object {
         const val COMMENT_MAX = 500
+        const val STARS_MIN = 1
+        const val STARS_MAX = 5
     }
 }
