@@ -65,6 +65,10 @@ jobs:
           context: .
           file: docker/Dockerfile.runtime
           platforms: linux/arm64
+          # 단일 플랫폼인데 buildx 는 기본으로 인덱스+증명서까지 밀어 올린다.
+          # 배포 1회에 ECR 항목이 3개가 되고, 그중 2개는 태그가 없어
+          # "최근 10개 유지" 규칙이 사실상 3~4회분밖에 못 남긴다
+          provenance: false
           push: true
           # 태그 = 커밋 SHA. 롤백은 이전 SHA 를 다시 올리는 것으로 끝난다
           tags: ${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
