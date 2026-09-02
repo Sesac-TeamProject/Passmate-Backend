@@ -52,6 +52,8 @@ enum class ErrorCode(val status: HttpStatus, val message: String) {
     SESSION_NOT_ENDED(HttpStatus.CONFLICT, "아직 종료되지 않은 세션입니다."),
     ALREADY_RATED(HttpStatus.CONFLICT, "이미 평가한 세션입니다."),
     RATING_WINDOW_CLOSED(HttpStatus.CONFLICT, "평가 가능 기간이 지났습니다."),
+    GUEST_RECORD_EXPIRED(HttpStatus.CONFLICT, "보관 기한이 지나 기록이 파기되었습니다."),
+    GUEST_RECORD_ALREADY_CLAIMED(HttpStatus.CONFLICT, "이미 계정에 연동된 기록입니다."),
     QUESTION_SET_REQUIRED(HttpStatus.CONFLICT, "확정된 문제 세트를 먼저 연결해 주세요."),
     NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
     ALREADY_JOINED(HttpStatus.CONFLICT, "이미 입장한 방입니다."),

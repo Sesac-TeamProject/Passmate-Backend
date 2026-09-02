@@ -10,6 +10,11 @@ interface ParticipantRepository : JpaRepository<Participant, Long> {
 
     fun existsByRoomIdAndNickname(roomId: Long, nickname: String): Boolean
 
+    /** 게스트 기록 전환에서 제출한 토큰으로 참가자를 찾는다(FR-036). */
+    fun findByGuestToken(guestToken: String): Participant?
+
+    fun existsByRoomIdAndUserId(roomId: Long, userId: Long): Boolean
+
     fun findAllByRoomIdAndStatusOrderByJoinedAtAsc(
         roomId: Long,
         status: ParticipantStatus,
