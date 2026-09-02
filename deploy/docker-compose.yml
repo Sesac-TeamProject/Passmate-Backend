@@ -1,9 +1,13 @@
-# 운영 — EC2 한 대에 nginx · app · mysql 을 함께 올린다.
+# 운영 — EC2 한 대에 nginx · web · app · mysql 을 함께 올린다.
 # RDS 를 쓰지 않는 결정은 노션 「인프라 구축 체크리스트 §비용」 참고(B안).
 # Redis 는 후순위라 넣지 않는다(.claude/CLAUDE.md §Redis).
 #
-#   배포:  sudo /opt/passmate/deploy.sh <ECR_REPOSITORY> <IMAGE_TAG>
-#   .env 는 deploy.sh 가 SSM Parameter Store 에서 만들어 둔다 — 레포에 커밋하지 않는다.
+#   배포:  sudo /opt/passmate/deploy.sh
+#   이미지 좌표·태그를 포함한 모든 값은 .env 에서 온다. deploy.sh 가 SSM Parameter Store 에서
+#   만들어 두므로 레포에 커밋하지 않는다.
+#
+#   백엔드와 프론트는 레포가 달라 각자 배포한다. 서로를 되돌리지 않는 근거는
+#   태그가 SSM 에 있다는 것이다 — 어느 쪽이 배포하든 상대의 현재 태그를 그대로 다시 읽어 쓴다.
 name: passmate
 
 services:
@@ -35,7 +39,7 @@ services:
       retries: 20
 
   app:
-    image: ${ECR_REPOSITORY}:${IMAGE_TAG}
+    image: ${ECR_REPOSITORY}:${APP_IMAGE_TAG}
     container_name: passmate-app
     restart: unless-stopped
     depends_on:
@@ -55,12 +59,34 @@ services:
       retries: 12
       start_period: 90s
 
+  # 웹(Next.js) — 정적 export 가 불가능한 구조라(동적 라우트 · next.config 의 redirects)
+  # Node 서버가 필요하다. nginx 가 passmate.kr 을 여기로 넘긴다.
+  # NEXT_PUBLIC_* 는 빌드 시점에 번들에 박히므로 이미지 자체가 환경을 담고 있다 —
+  # 여기서 API 주소를 바꿔도 소용없고, 프론트 CI 의 build-arg 를 바꿔야 한다.
+  web:
+    image: ${ECR_WEB_REPOSITORY}:${WEB_IMAGE_TAG}
+    container_name: passmate-web
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      # 2GB 인스턴스에 JVM(640m)·MySQL(256m 풀)이 함께 산다 — JS 힙 상한을 못 박는다
+      NODE_OPTIONS: --max-old-space-size=320
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   nginx:
     image: nginx:1.27-alpine
     container_name: passmate-nginx
     restart: unless-stopped
     depends_on:
       - app
+      - web
     ports:
       - "80:80"
       - "443:443"
@@ -68,8 +94,6 @@ services:
       - ./nginx/passmate.conf:/etc/nginx/conf.d/default.conf:ro
       # 인증서는 호스트 certbot 이 관리한다. 컨테이너는 읽기만 한다
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      # 웹 팀이 올린 정적 파일
-      - /var/www/web:/var/www/web:ro
       # certbot --webroot 갱신용 챌린지 경로
       - /var/www/certbot:/var/www/certbot:ro
 

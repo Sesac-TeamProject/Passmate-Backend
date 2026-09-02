@@ -73,6 +73,15 @@ jobs:
       - name: deploy/ 를 S3 로 동기화
         run: aws s3 sync deploy/ "s3://${{ secrets.S3_BUCKET }}/deploy/" --delete
 
+      # 태그는 인자가 아니라 SSM 이 원본이다. 프론트(Passmate-Frontend)가 같은 EC2 에
+      # 자기 컨테이너를 따로 배포하는데, 양쪽 모두 상대의 태그를 SSM 에서 다시 읽어 쓰기 때문에
+      # 한쪽 배포가 다른 쪽을 이전 버전으로 되돌리지 않는다
+      - name: 이미지 태그를 SSM 에 기록
+        run: |
+          aws ssm put-parameter --region "${{ env.AWS_REGION }}" \
+            --name /passmate/prod/APP_IMAGE_TAG \
+            --value "${GITHUB_SHA}" --type String --overwrite >/dev/null
+
       - name: EC2 배포 (SSM Run Command)
         run: |
           set -euo pipefail
@@ -89,7 +98,7 @@ jobs:
               mkdir -p /opt/passmate; \
               aws s3 sync s3://${{ secrets.S3_BUCKET }}/deploy/ /opt/passmate/ --region ${{ env.AWS_REGION }}; \
               chmod +x /opt/passmate/*.sh; \
-              /opt/passmate/deploy.sh ${{ secrets.ECR_REPOSITORY }} ${GITHUB_SHA}" \
+              /opt/passmate/deploy.sh" \
             --query 'Command.CommandId' --output text)
 
           aws ssm wait command-executed --command-id "$cid" --instance-id "$INSTANCE" || true
