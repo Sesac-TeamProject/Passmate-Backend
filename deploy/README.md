@@ -8,7 +8,7 @@
 | `docker-compose.yml` | nginx · app · mysql 세 컨테이너. MySQL 포트는 밖으로 열지 않는다 |
 | `nginx/passmate.conf` | `passmate.kr` → 정적 파일 / `api.passmate.kr` → app:8080. TLS · `/ws` Upgrade |
 | `deploy.sh` | SSM → `.env` · `nginx/.htpasswd` → ECR pull → `compose up` → app 헬스체크 → nginx 확인 |
-| `backup.sh` | `mysqldump` → S3 (`backups/`). cron 이 부른다 |
+| `backup.sh` | `mysqldump` → S3 (`backups/`). systemd 타이머가 부른다 |
 
 ## EC2 최초 1회 준비
 
@@ -46,13 +46,35 @@ unset PW
 `deploy.sh` 가 빈 파일이라도 반드시 만드는 이유는, 파일이 없으면 Docker 가 같은 이름의
 디렉터리를 만들어 **nginx 자체가 뜨지 못하기** 때문이다.
 
-## 백업 cron
+## 백업 자동화
+
+⚠️ **AL2023 에는 cron 이 기본으로 없다**(`crontab: command not found`). systemd 타이머를 쓴다.
 
 ```bash
-sudo crontab -e
-# UTC 18:00 = KST 03:00
-0 18 * * * /opt/passmate/backup.sh >> /var/log/passmate-backup.log 2>&1
+sudo tee /etc/systemd/system/passmate-backup.service >/dev/null <<'EOF'
+[Unit]
+Description=PassMate MySQL dump to S3
+[Service]
+Type=oneshot
+ExecStart=/opt/passmate/backup.sh
+EOF
+
+sudo tee /etc/systemd/system/passmate-backup.timer >/dev/null <<'EOF'
+[Unit]
+Description=Run PassMate backup daily
+[Timer]
+OnCalendar=*-*-* 18:00:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now passmate-backup.timer
+systemctl list-timers passmate-backup.timer
 ```
+
+`Persistent=true` 라 인스턴스를 껐다 켠 사이에 지나간 시각이 있으면 부팅 후 한 번 실행한다.
 
 ## 롤백
 
