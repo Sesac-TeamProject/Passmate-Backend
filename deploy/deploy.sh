@@ -125,9 +125,11 @@ done
 
 echo "배포 성공 — app:$(grep '^APP_IMAGE_TAG=' .env | cut -d= -f2- | cut -c1-7) web:$(grep '^WEB_IMAGE_TAG=' .env | cut -d= -f2- | cut -c1-7)"
 
-# 옛 이미지 정리.
+# 옛 이미지 정리 — 지금 떠 있는 것만 남긴다.
 # ⚠️ `prune -f`(-a 없이)는 **태그 없는(dangling)** 이미지만 지운다. 우리 태그는 커밋 SHA라
 # 배포할 때마다 새 태그가 생기고 옛 이미지는 태그를 단 채 남아 하나도 지워지지 않았다.
-# -a 로 "컨테이너가 쓰지 않는 이미지" 전부를 대상으로 하되 7일은 남겨 로컬 롤백 여지를 둔다.
-# 실행 중인 컨테이너가 쓰는 이미지는 -a 여도 지워지지 않는다.
-docker image prune -af --filter "until=168h" >/dev/null
+# -a 는 "컨테이너가 쓰지 않는 이미지" 전부가 대상이다. 실행 중인 컨테이너가 쓰는
+# 이미지(app · web · mysql · nginx)는 -a 여도 지워지지 않으니 안전하다.
+#
+# 로컬에 옛 이미지를 남겨 둘 이유가 없다 — 롤백은 어차피 ECR 에서 다시 받는다.
+docker image prune -af >/dev/null
