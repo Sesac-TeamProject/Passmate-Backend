@@ -94,5 +94,10 @@ if ! curl -fsS -k -o /dev/null --max-time 10 \
 fi
 
 echo "배포 성공 — $IMAGE_TAG"
-# 이전 태그 이미지가 쌓이면 30GB 를 금방 먹는다
-docker image prune -f >/dev/null
+
+# 옛 이미지 정리.
+# ⚠️ `prune -f`(-a 없이)는 **태그 없는(dangling)** 이미지만 지운다. 우리 태그는 커밋 SHA라
+# 배포할 때마다 새 태그가 생기고 옛 이미지는 태그를 단 채 남아 하나도 지워지지 않았다.
+# -a 로 "컨테이너가 쓰지 않는 이미지" 전부를 대상으로 하되 7일은 남겨 로컬 롤백 여지를 둔다.
+# 실행 중인 컨테이너가 쓰는 이미지는 -a 여도 지워지지 않는다.
+docker image prune -af --filter "until=168h" >/dev/null
