@@ -33,6 +33,7 @@ class HostGradeService(
     private val roomStatsService: RoomStatsService,
     private val roomRatingQueryService: RoomRatingQueryService,
     private val hostProfileRepository: HostProfileRepository,
+    private val badgeService: BadgeService,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -73,6 +74,9 @@ class HostGradeService(
         )
 
         if (before != after) log.info("호스트 등급이 바뀌었다 userId={} {} -> {}", userId, before, after)
+
+        // 뱃지 조건도 같은 집계를 본다 — 따로 돌릴 이유가 없다
+        badgeService.refresh(profile, now)
         return profile
     }
 

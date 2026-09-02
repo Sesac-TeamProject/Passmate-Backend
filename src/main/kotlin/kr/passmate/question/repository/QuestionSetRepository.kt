@@ -13,6 +13,12 @@ interface QuestionSetRepository : JpaRepository<QuestionSet, Long> {
 
     fun findAllByOwnerUserIdAndDeletedAtIsNull(ownerUserId: Long, pageable: Pageable): Page<QuestionSet>
 
+    /** AI 로 만든 세트 수. 뱃지 "AI 세트 50개" 가 쓴다. */
+    fun countByOwnerUserIdAndSourceAndDeletedAtIsNull(
+        ownerUserId: Long,
+        source: kr.passmate.question.domain.ContentSource,
+    ): Long
+
     fun findAllByOwnerUserIdAndStatusAndDeletedAtIsNull(
         ownerUserId: Long,
         status: QuestionSetStatus,

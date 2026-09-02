@@ -61,6 +61,18 @@ class PublicRoomQueryService(
      * 카드에 필요한 호스트 닉네임·문항 수를 **한 번씩만** 조회해 붙인다.
      * 방마다 따로 부르면 페이지 크기만큼 쿼리가 늘어난다(N+1).
      */
+    /**
+     * 이 선생님이 지금 열어 둔 공개 방(운영 중·예정). 공개 프로필의 "참여하기" 목록이다.
+     *
+     * **공개로 설정한 방만** 내보낸다 — 프로필은 누구나 보는 화면이라
+     * 비공개 방까지 실으면 링크로만 돌리려던 방이 그대로 드러난다.
+     */
+    fun openRoomsOfHost(hostUserId: Long): List<PublicRoomResponse> {
+        val rooms = roomRepository
+            .findAllByHostUserIdAndStatusInAndIsPublicTrueOrderByIdDesc(hostUserId, OPEN_STATUSES)
+        return rooms.map(toResponse(rooms))
+    }
+
     private fun toResponse(rooms: List<Room>): (Room) -> PublicRoomResponse {
         val nicknames = userQueryService.getNicknames(rooms.map { it.hostUserId })
         val questionCounts = questionSetQueryService.getQuestionCounts(rooms.mapNotNull { it.questionSetId })
