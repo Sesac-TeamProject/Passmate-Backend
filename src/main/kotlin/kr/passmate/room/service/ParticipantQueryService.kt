@@ -42,6 +42,11 @@ class ParticipantQueryService(
     fun listByUser(userId: Long): List<Participant> =
         participantRepository.findAllByUserIdOrderByJoinedAtDesc(userId)
 
+    /** 참가자 한 명. 방을 모르는 경로(신고 접수)가 존재만 확인할 때 쓴다. */
+    fun get(participantId: Long): Participant =
+        participantRepository.findById(participantId)
+            .orElseThrow { BusinessException(ErrorCode.PARTICIPANT_NOT_FOUND) }
+
     /** 그 방의 참가자 한 명. 다른 방 참가자 id 로는 찾히지 않는다. */
     fun getOfRoom(roomId: Long, participantId: Long): Participant =
         participantRepository.findById(participantId)

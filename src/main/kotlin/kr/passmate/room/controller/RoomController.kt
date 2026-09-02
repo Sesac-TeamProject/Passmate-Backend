@@ -52,9 +52,10 @@ class RoomController(
     )
     @GetMapping("/public")
     fun publicRooms(
+        @CurrentUser(required = false) principal: UserPrincipal?,
         @Valid @ModelAttribute request: PublicRoomSearchRequest,
     ): PageResponse<PublicRoomResponse> =
-        PageResponse.from(publicRoomQueryService.search(request)) { it }
+        PageResponse.from(publicRoomQueryService.search(request, principal?.userId)) { it }
 
     @Operation(summary = "방 상세 조회")
     @GetMapping("/{roomId}")

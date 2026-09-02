@@ -119,6 +119,7 @@ interface RoomRepository : JpaRepository<Room, Long> {
         @Param("type") type: RoomType?,
         @Param("q") q: String?,
         @Param("hostIds") hostIds: Collection<Long>,
+        @Param("blockedHostIds") blockedHostIds: Collection<Long>,
         @Param("from") from: LocalDateTime?,
         @Param("to") to: LocalDateTime?,
         pageable: Pageable,
@@ -134,6 +135,7 @@ interface RoomRepository : JpaRepository<Room, Long> {
         @Param("type") type: RoomType?,
         @Param("q") q: String?,
         @Param("hostIds") hostIds: Collection<Long>,
+        @Param("blockedHostIds") blockedHostIds: Collection<Long>,
         @Param("from") from: LocalDateTime?,
         @Param("to") to: LocalDateTime?,
         pageable: Pageable,
@@ -153,6 +155,7 @@ interface RoomRepository : JpaRepository<Room, Long> {
                    or lower(r.title) like lower(concat('%', :q, '%'))
                    or lower(r.topic) like lower(concat('%', :q, '%'))
                    or r.hostUserId in :hostIds)
+              and r.hostUserId not in :blockedHostIds
         """
 
         private const val ORDER_BY_POPULAR = """

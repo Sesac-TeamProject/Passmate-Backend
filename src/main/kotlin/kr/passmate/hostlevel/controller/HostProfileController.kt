@@ -2,6 +2,8 @@ package kr.passmate.hostlevel.controller
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import kr.passmate.common.security.CurrentUser
+import kr.passmate.common.security.UserPrincipal
 import kr.passmate.hostlevel.dto.HostProfileResponse
 import kr.passmate.hostlevel.service.HostProfileQueryService
 import org.springframework.web.bind.annotation.GetMapping
@@ -21,9 +23,12 @@ class HostProfileController(
 
     @Operation(
         summary = "호스트 공개 프로필 조회",
-        description = "닉네임·등급·획득 뱃지·평균 별점·운영 실적과 지금 열어 둔 공개 방. 공개 화면이라 로그인 없이도 볼 수 있다.",
+        description = "닉네임·등급·획득 뱃지·평균 별점·운영 실적과 지금 열어 둔 공개 방. 로그인 없이도 볼 수 있고, 내가 차단한 선생님은 403.",
     )
     @GetMapping("/profile")
-    fun getProfile(@PathVariable userId: Long): HostProfileResponse =
-        hostProfileQueryService.getProfile(userId)
+    fun getProfile(
+        @CurrentUser(required = false) principal: UserPrincipal?,
+        @PathVariable userId: Long,
+    ): HostProfileResponse =
+        hostProfileQueryService.getProfile(userId, principal?.userId)
 }

@@ -4,6 +4,7 @@ import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.hostlevel.config.HostLevelProperties
 import kr.passmate.hostlevel.dto.HostProfileResponse
+import kr.passmate.moderation.service.UserBlockQueryService
 import kr.passmate.room.service.PublicRoomQueryService
 import kr.passmate.user.domain.User
 import kr.passmate.user.service.UserService
@@ -23,9 +24,17 @@ class HostProfileQueryService(
     private val publicRoomQueryService: PublicRoomQueryService,
     private val hostGradeQueryService: HostGradeQueryService,
     private val badgeQueryService: BadgeQueryService,
+    private val userBlockQueryService: UserBlockQueryService,
 ) {
 
-    fun getProfile(userId: Long): HostProfileResponse {
+    /**
+     * [viewerUserId] 가 이 호스트를 차단했다면 프로필을 열어 주지 않는다(FR-067).
+     * 차단은 "이 사람을 더 보고 싶지 않다"는 뜻이라 프로필이 그대로 열리면 차단한 의미가 없다.
+     */
+    fun getProfile(userId: Long, viewerUserId: Long? = null): HostProfileResponse {
+        if (viewerUserId != null && userBlockQueryService.isBlocked(viewerUserId, userId)) {
+            throw BusinessException(ErrorCode.ACCESS_DENIED, "차단한 선생님의 프로필은 볼 수 없습니다.")
+        }
         val user = activeUser(userId)
         val profile = hostGradeQueryService.findProfile(userId)
         val level = profile?.level ?: properties.lowest.level
