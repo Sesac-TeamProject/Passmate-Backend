@@ -27,6 +27,25 @@ systemctl list-timers | grep certbot
 
 인증서가 없으면 `deploy.sh` 가 시작 단계에서 멈춘다 — nginx 가 뜨지 못하기 때문이다.
 
+## Swagger Basic Auth
+
+`api.passmate.kr/swagger-ui.html` 은 웹·앱 팀 연동용으로 열어 두되, 인터넷에 그대로
+노출하지 않는다(엔드포인트·요청 스키마가 전부 공개된다). nginx 가 Basic Auth 로 가린다.
+
+계정은 SSM `/passmate/prod/SWAGGER_HTPASSWD` 에 **`user:해시` 한 줄**로 넣는다.
+`deploy.sh` 가 매 배포마다 `nginx/.htpasswd` 로 써서 컨테이너에 마운트한다.
+
+```bash
+# 해시 생성 (평문 비밀번호는 히스토리에 남지 않게 read 로 받는다)
+read -rs -p "Swagger 비밀번호: " PW; echo
+docker run --rm httpd:2.4-alpine htpasswd -nbB passmate "$PW"
+unset PW
+```
+
+**값이 비어 있어도 사이트는 정상 동작한다** — Swagger 만 401 이 된다.
+`deploy.sh` 가 빈 파일이라도 반드시 만드는 이유는, 파일이 없으면 Docker 가 같은 이름의
+디렉터리를 만들어 **nginx 자체가 뜨지 못하기** 때문이다.
+
 ## 백업 cron
 
 ```bash

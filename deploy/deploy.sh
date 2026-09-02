@@ -49,6 +49,17 @@ fi
 } >> .env.new
 mv .env.new .env
 
+# ── 2-b. Swagger Basic Auth 계정 파일 ──────────────────────────
+# nginx 가 /swagger-ui · /v3/api-docs 를 가릴 때 쓴다.
+# ⚠️ 이 파일이 없으면 Docker 가 같은 이름의 **디렉터리**를 만들고 nginx 가 뜨지 못한다.
+#    Swagger 하나 때문에 사이트 전체가 죽으므로, 값이 없어도 빈 파일을 반드시 만든다
+#    (빈 파일이면 Swagger 만 401 이 되고 나머지 경로는 정상 동작한다).
+# 값은 SSM /passmate/prod/SWAGGER_HTPASSWD — `user:$apr1$...` 한 줄.
+mkdir -p nginx
+sed -n 's/^SWAGGER_HTPASSWD=//p' .env > nginx/.htpasswd
+# nginx 워커(uid 101)가 요청마다 읽는다 — 600 이면 못 읽어 403 이 난다
+chmod 644 nginx/.htpasswd
+
 # ── 3. ECR 로그인 → pull → up ──────────────────────────────────
 aws ecr get-login-password --region "$REGION" \
   | docker login --username AWS --password-stdin "${ECR_REPOSITORY%%/*}"

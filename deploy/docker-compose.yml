@@ -66,6 +66,10 @@ services:
       - "443:443"
     volumes:
       - ./nginx/passmate.conf:/etc/nginx/conf.d/default.conf:ro
+      # Swagger Basic Auth 계정. deploy.sh 가 SSM 값으로 매 배포마다 새로 쓴다.
+      # ⚠️ 파일이 없으면 Docker 가 같은 이름의 디렉터리를 만들어 nginx 가 못 뜬다 —
+      #    그래서 deploy.sh 는 값이 비어 있어도 빈 파일을 반드시 만든다
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
       # 인증서는 호스트 certbot 이 관리한다. 컨테이너는 읽기만 한다
       - /etc/letsencrypt:/etc/letsencrypt:ro
       # 웹 팀이 올린 정적 파일
