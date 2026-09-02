@@ -1,4 +1,6 @@
-# develop 에 머지되면 자동 배포한다.
+# main 에 머지되면 자동 배포한다(develop → main PR 이 배포 트리거다).
+# 다른 브랜치는 Actions 탭의 `Run workflow` 로 골라서 수동 배포한다 — 지금은 서버가 1대라
+# develop 을 수동으로 올려 팀 연동용으로 쓴다.
 #   test → jar 빌드 → arm64 이미지 ECR 푸시 → deploy/ 를 S3 로 동기화 → SSM 으로 EC2 에서 배포
 #
 # 필요한 레포 Secrets: AWS_ROLE_ARN · ECR_REPOSITORY · EC2_INSTANCE_ID · S3_BUCKET
@@ -6,7 +8,12 @@ name: deploy
 
 on:
   push:
-    branches: [develop]
+    # main 이 원칙이다(CLAUDE.md — develop → main PR 병합이 배포 트리거).
+    # develop 은 **첫 배포 검증용 임시**다. 파이프라인이 정상 동작하는 것을 확인하면 지운다.
+    # 지금 빼면 배포할 방법이 없다 — workflow_dispatch 는 워크플로 파일이
+    # 기본 브랜치(main)에 있어야 UI 에 나타나는데, main 은 아직 뒤처져 있다
+    branches: [main, develop]
+  # 수동 실행. 브랜치를 골라 배포할 수 있다(main 에 올라간 뒤부터 버튼이 보인다)
   workflow_dispatch:
 
 # 배포가 겹치면 뒤 배포가 앞 배포를 덮어써 상태가 꼬인다. 줄 세운다
