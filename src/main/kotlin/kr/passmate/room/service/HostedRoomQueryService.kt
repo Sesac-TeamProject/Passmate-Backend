@@ -1,5 +1,6 @@
 package kr.passmate.room.service
 
+import kr.passmate.hostlevel.service.HostGradeQueryService
 import kr.passmate.rating.service.RoomRatingQueryService
 import kr.passmate.room.domain.Room
 import kr.passmate.room.domain.RoomStatus
@@ -25,6 +26,7 @@ class HostedRoomQueryService(
     private val participantRepository: ParticipantRepository,
     private val roomStatsService: RoomStatsService,
     private val roomRatingQueryService: RoomRatingQueryService,
+    private val hostGradeQueryService: HostGradeQueryService,
 ) {
 
     fun getHostedRooms(hostUserId: Long): HostedRoomsResponse {
@@ -32,6 +34,9 @@ class HostedRoomQueryService(
         val (ended, active) = rooms.partition { it.status == RoomStatus.ENDED }
 
         val ratings = roomRatingQueryService.starsOfHost(hostUserId)
+        // 세션을 한 번도 안 한 회원은 프로필이 없다 — 그때는 등급 자리를 비워 둔다
+        val grade = hostGradeQueryService.findProfile(hostUserId)
+            ?.let { hostGradeQueryService.toResponse(it) }
         val stats = roomStatsService.getUserRoomStats(hostUserId)
         // 종료된 방만 학생 수를 세면 된다 — 진행 중인 방은 room.participantCount 가 곧 현재 인원이다
         val studentCounts = participantRepository
@@ -40,9 +45,9 @@ class HostedRoomQueryService(
 
         return HostedRoomsResponse(
             reputation = HostReputation(
-                // hostlevel 기능 전까지 null. 0 으로 주면 "Lv.0" 으로 읽힌다
-                level = null,
-                nextLevelProgress = null,
+                // 아직 판정된 적 없으면 null. 0 으로 주면 "Lv.0" 으로 읽힌다
+                level = grade?.level,
+                nextLevelProgress = grade?.nextLevelProgress,
                 hostedSessionCount = stats.hostedSessionCount,
                 totalStudentCount = stats.totalStudentCount,
                 averageStars = ratings.overallAverage,

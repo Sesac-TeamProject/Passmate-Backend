@@ -42,7 +42,8 @@ class RoomStatsService(
     fun getUserRoomStats(userId: Long) = UserRoomStats(
         joinedRoomCount = participantRepository.countByUserId(userId),
         hostedRoomCount = roomRepository.countByHostUserId(userId),
-        hostedSessionCount = roomRepository.countByHostUserIdAndStatus(userId, RoomStatus.ENDED),
+        hostedSessionCount = roomRepository
+            .countByHostUserIdAndStatusAndStartedAtIsNotNull(userId, RoomStatus.ENDED),
         totalStudentCount = roomRepository.sumParticipantCountByHostAndStatus(userId, RoomStatus.ENDED),
     )
 

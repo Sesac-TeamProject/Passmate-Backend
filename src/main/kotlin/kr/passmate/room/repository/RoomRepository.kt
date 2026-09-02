@@ -40,6 +40,29 @@ interface RoomRepository : JpaRepository<Room, Long> {
 
     fun countByHostUserIdAndStatus(hostUserId: Long, status: RoomStatus): Long
 
+    /**
+     * 방 운영 횟수 (FR-045). **시작해서 종료까지 간 방만** 센다 —
+     * 만들어만 놓고 닫은 방은 운영한 것이 아니라 등급에 넣지 않는다.
+     */
+    fun countByHostUserIdAndStatusAndStartedAtIsNotNull(hostUserId: Long, status: RoomStatus): Long
+
+    /** 유지 판정 기간 안에 끝낸 세션 수(FR-047). */
+    fun countByHostUserIdAndStatusAndEndedAtGreaterThanEqual(
+        hostUserId: Long,
+        status: RoomStatus,
+        endedAt: java.time.LocalDateTime,
+    ): Long
+
+    /** 세션을 한 번이라도 진행한 적 있는 호스트 전부. 등급 판정 배치가 훑는다. */
+    @Query(
+        """
+        select distinct r.hostUserId
+        from Room r
+        where r.status = :status and r.startedAt is not null
+        """,
+    )
+    fun findHostUserIdsWithEndedSession(@Param("status") status: RoomStatus): List<Long>
+
     /** 누적 학생 수. 방마다 캐시해 둔 participant_count 를 더한다 — 참가자 행을 다시 세지 않는다. */
     @Query(
         """
