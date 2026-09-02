@@ -24,6 +24,9 @@ enum class SessionEventType {
     /** 학생 화면 잠금/해제 — 잠금 중에는 답안 제출이 막힌다 */
     SCREEN_LOCKED,
 
+    /** 음성 힌트 송출 — 학생 화면이 받아 3초 이내에 자동 재생한다 */
+    HINT_PUBLISHED,
+
     SESSION_ENDED,
 
     PARTICIPANT_JOINED,

@@ -10,6 +10,8 @@ import kr.passmate.room.dto.RoomCreateRequest
 import kr.passmate.room.dto.RoomUpdateRequest
 import kr.passmate.room.service.RoomService
 import kr.passmate.session.service.SessionService
+import kr.passmate.voicehint.service.VoiceHintService
+import kr.passmate.support.FakeStorageConfig
 import kr.passmate.support.IntegrationTestSupport
 import kr.passmate.user.domain.AuthProvider
 import kr.passmate.user.service.UserService
@@ -17,6 +19,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
+import org.springframework.mock.web.MockMultipartFile
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.messaging.converter.MappingJackson2MessageConverter
 import org.springframework.messaging.simp.stomp.StompFrameHandler
@@ -35,6 +39,7 @@ import java.util.concurrent.TimeUnit
  * 특히 **QUESTION_STARTED 에 정답이 실리지 않는지**는 여기서만 확인할 수 있다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(FakeStorageConfig::class)
 class SessionBroadcastTest : IntegrationTestSupport() {
 
     @LocalServerPort private var port: Int = 0
@@ -43,6 +48,7 @@ class SessionBroadcastTest : IntegrationTestSupport() {
     @Autowired private lateinit var roomService: RoomService
     @Autowired private lateinit var questionSetService: QuestionSetService
     @Autowired private lateinit var sessionService: SessionService
+    @Autowired private lateinit var voiceHintService: VoiceHintService
     @Autowired private lateinit var jwtTokenProvider: JwtTokenProvider
 
     @Test
@@ -134,6 +140,50 @@ class SessionBroadcastTest : IntegrationTestSupport() {
         @Suppress("UNCHECKED_CAST")
         val unlockedPayload = drainUntil(received, "SCREEN_LOCKED")["payload"] as Map<String, Any?>
         assertThat(unlockedPayload["locked"]).isEqualTo(false)
+
+        session.disconnect()
+    }
+
+    @Test
+    fun `음성 힌트를 보내면 방 전체가 재생 주소를 받는다`() {
+        val hostId = userService.loginOrRegister(
+            AuthProvider.GOOGLE, "bc-hint-${System.nanoTime()}", null, "호스트", null,
+        ).user.id
+
+        val set = questionSetService.create(hostId, QuestionSetCreateRequest("힌트 방송"))
+        questionSetService.addQuestion(
+            set.id, hostId,
+            QuestionRequest(
+                type = QuestionType.MCQ,
+                content = "404 는?",
+                choices = listOf("성공", "찾을 수 없음"),
+                answer = "찾을 수 없음",
+                timeLimitSec = 30,
+                points = 100,
+            ),
+        )
+        questionSetService.confirm(set.id, hostId)
+
+        val room = roomService.create(hostId, RoomCreateRequest(title = "힌트 방송", type = RoomType.FREE))
+        roomService.update(room.id, hostId, RoomUpdateRequest(title = "힌트 방송", questionSetId = set.id))
+        sessionService.start(room.id, hostId)
+
+        val received = LinkedBlockingQueue<Map<String, Any?>>()
+        val session = subscribeRoom(room.id, hostId, received)
+
+        voiceHintService.publish(
+            roomId = room.id,
+            hostUserId = hostId,
+            file = MockMultipartFile("file", "hint.webm", "audio/webm", byteArrayOf(1, 2, 3)),
+            durationMs = 1800,
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val payload = drainUntil(received, "HINT_PUBLISHED")["payload"] as Map<String, Any?>
+        // 학생 화면이 3초 안에 자동 재생하려면 주소가 이벤트에 실려 있어야 한다
+        assertThat(payload["audioUrl"].toString()).startsWith("https://fake-storage.test/rooms/${room.id}/hints/")
+        assertThat(payload["durationMs"]).isEqualTo(1800)
+        assertThat(payload).containsKeys("hintId", "sessionQuestionId", "questionId", "publishedAt")
 
         session.disconnect()
     }
