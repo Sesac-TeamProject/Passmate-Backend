@@ -70,22 +70,40 @@ docker compose up -d --remove-orphans
 # ── 4. 헬스체크 ────────────────────────────────────────────────
 # app 컨테이너의 healthcheck 상태를 본다(compose 에 정의돼 있다).
 # Flyway 마이그레이션까지 끝나야 UP 이라 start_period 를 넉넉히 잡아 뒀다
+healthy=false
 for _ in $(seq 1 40); do
   status="$(docker inspect --format='{{.State.Health.Status}}' passmate-app 2>/dev/null || echo starting)"
   case "$status" in
-    healthy)
-      echo "배포 성공 — $IMAGE_TAG"
-      # 이전 태그 이미지가 쌓이면 30GB 를 금방 먹는다
-      docker image prune -f >/dev/null
-      exit 0
-      ;;
-    unhealthy)
-      break
-      ;;
+    healthy)   healthy=true; break ;;
+    unhealthy) break ;;
   esac
   sleep 5
 done
 
-echo "헬스체크 실패 (상태: ${status:-unknown}). 최근 로그:" >&2
-docker compose logs --tail=120 app >&2
-exit 1
+if [ "$healthy" != true ]; then
+  echo "앱 헬스체크 실패 (상태: ${status:-unknown}). 최근 로그:" >&2
+  docker compose logs --tail=120 app >&2
+  exit 1
+fi
+
+# ── 5. nginx 확인 ──────────────────────────────────────────────
+# nginx 에는 healthcheck 가 없다. 설정이 한 줄만 틀려도 컨테이너가 못 뜨는데
+# app 은 healthy 라 배포가 초록불로 끝난다 — 사이트 전체가 죽은 채로.
+if [ "$(docker inspect -f '{{.State.Running}}' passmate-nginx 2>/dev/null)" != "true" ]; then
+  echo "nginx 가 뜨지 않았다 — 설정 오류일 가능성이 높다. 최근 로그:" >&2
+  docker compose logs --tail=60 nginx >&2
+  exit 1
+fi
+
+# 밖에서 실제로 닿는지까지 본다 — TLS · server_name · 프록시 경로를 한 번에 검증한다.
+# 자기 EIP 로는 되돌아오지 못할 수 있어 루프백에 Host 헤더를 실어 부른다(인증서는 -k 로 건너뛴다)
+if ! curl -fsS -k -o /dev/null --max-time 10 \
+       -H 'Host: api.passmate.kr' https://127.0.0.1/actuator/health; then
+  echo "nginx 를 통한 요청이 실패했다. 최근 로그:" >&2
+  docker compose logs --tail=60 nginx >&2
+  exit 1
+fi
+
+echo "배포 성공 — $IMAGE_TAG"
+# 이전 태그 이미지가 쌓이면 30GB 를 금방 먹는다
+docker image prune -f >/dev/null

@@ -7,7 +7,7 @@
 |---|---|
 | `docker-compose.yml` | nginx · app · mysql 세 컨테이너. MySQL 포트는 밖으로 열지 않는다 |
 | `nginx/passmate.conf` | `passmate.kr` → 정적 파일 / `api.passmate.kr` → app:8080. TLS · `/ws` Upgrade |
-| `deploy.sh` | SSM → `.env` → ECR pull → `compose up` → 헬스체크 |
+| `deploy.sh` | SSM → `.env` · `nginx/.htpasswd` → ECR pull → `compose up` → app 헬스체크 → nginx 확인 |
 | `backup.sh` | `mysqldump` → S3 (`backups/`). cron 이 부른다 |
 
 ## EC2 최초 1회 준비
