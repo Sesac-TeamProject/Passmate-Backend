@@ -1,5 +1,6 @@
 package kr.passmate.room.service
 
+import kr.passmate.moderation.service.UserBlockQueryService
 import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.room.domain.Room
 import kr.passmate.room.domain.RoomStatus
@@ -29,11 +30,16 @@ import java.time.LocalDateTime
 @Transactional(readOnly = true)
 class PublicRoomQueryService(
     private val roomRepository: RoomRepository,
+    private val userBlockQueryService: UserBlockQueryService,
     private val userQueryService: UserQueryService,
     private val questionSetQueryService: QuestionSetQueryService,
 ) {
 
-    fun search(request: PublicRoomSearchRequest): Page<PublicRoomResponse> {
+    /**
+     * [viewerUserId] 가 차단한 호스트의 방은 빼고 준다(FR-054 · FR-067).
+     * 거르기는 **쿼리 안에서** 한다 — 가져온 뒤 걸러 내면 페이지마다 개수가 들쭉날쭉해진다.
+     */
+    fun search(request: PublicRoomSearchRequest, viewerUserId: Long? = null): Page<PublicRoomResponse> {
         val pageable = request.toPageable()
         val keyword = request.q?.trim()?.takeIf { it.isNotEmpty() }
 
@@ -44,14 +50,18 @@ class PublicRoomQueryService(
             ?.takeIf { it.isNotEmpty() }
             ?: listOf(NO_MATCH_ID)
 
+        // in/not in 절은 빈 목록을 못 받는다. 아무것도 안 가릴 때는 맞을 리 없는 id 하나를 넣는다
+        val blockedHostIds = userBlockQueryService.blockedIdsOfOrEmpty(viewerUserId)
+            .takeIf { it.isNotEmpty() } ?: listOf(NO_MATCH_ID)
+
         val (from, to) = todayRange(request.today)
         val page = when (request.sort) {
             PublicRoomSort.POPULAR -> roomRepository.findPublicByPopularity(
-                statuses(request.status), roomType(request.type), keyword, hostIds, from, to, pageable,
+                statuses(request.status), roomType(request.type), keyword, hostIds, blockedHostIds, from, to, pageable,
             )
 
             PublicRoomSort.UPCOMING -> roomRepository.findPublicByUpcoming(
-                statuses(request.status), roomType(request.type), keyword, hostIds, from, to, pageable,
+                statuses(request.status), roomType(request.type), keyword, hostIds, blockedHostIds, from, to, pageable,
             )
         }
         return page.map(toResponse(page.content))

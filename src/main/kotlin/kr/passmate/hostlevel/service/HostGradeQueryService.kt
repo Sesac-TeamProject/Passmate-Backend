@@ -34,6 +34,15 @@ class HostGradeQueryService(
     fun levelsOf(userIds: Collection<Long>): Map<Long, Int> =
         hostProfileRepository.findAllByUserIdIn(userIds).associate { it.userId to it.level }
 
+    /**
+     * 여러 사람의 등급. **아직 판정된 적 없는 회원은 기본 등급으로 채운다** —
+     * 목록 화면에서 등급 칸만 비면 "등급 없음"처럼 읽힌다.
+     */
+    fun levelsOrDefault(userIds: Collection<Long>): Map<Long, Int> {
+        val known = levelsOf(userIds)
+        return userIds.associateWith { known[it] ?: properties.lowest.level }
+    }
+
     fun findProfile(userId: Long): HostProfile? = hostProfileRepository.findByUserId(userId)
 
     fun toResponse(profile: HostProfile): HostGradeResponse {
