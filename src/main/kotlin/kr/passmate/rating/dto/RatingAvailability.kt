@@ -1,27 +1,29 @@
 package kr.passmate.rating.dto
 
 import io.swagger.v3.oas.annotations.media.Schema
+import kr.passmate.common.exception.ErrorCode
 import java.time.LocalDateTime
 
 /** 평가할 수 없는 이유. 화면이 띄울 안내 문구가 이유마다 다르다. */
-enum class RatingBlockedReason {
+enum class RatingBlockedReason(val errorCode: ErrorCode) {
     /** 아직 세션이 끝나지 않았다 */
-    SESSION_NOT_ENDED,
+    SESSION_NOT_ENDED(ErrorCode.SESSION_NOT_ENDED),
 
     /** 답안을 한 개도 내지 않았다 — "평가할 수 없어요" 토스트 */
-    NO_SUBMISSION,
+    NO_SUBMISSION(ErrorCode.RATING_NOT_ALLOWED),
 
     /** 종료 후 평가 기간이 지났다 */
-    WINDOW_CLOSED,
+    WINDOW_CLOSED(ErrorCode.RATING_WINDOW_CLOSED),
 
     /** 이미 평가했다 — 완료 표시 */
-    ALREADY_RATED,
+    ALREADY_RATED(ErrorCode.ALREADY_RATED),
 }
 
 /**
  * 이 사람이 지금 이 방을 평가할 수 있는지 (FR-035 · FR-036).
  *
  * 조건이 여럿이라 boolean 하나로는 화면이 뭘 띄울지 못 정한다 — 막힌 이유를 함께 준다.
+ * 조회(결과 화면)와 제출(POST)이 **같은 판정**을 쓰도록, 이유마다 제출 때 낼 오류 코드를 붙여 둔다.
  */
 @Schema(description = "세션 평가 가능 여부")
 data class RatingAvailability(

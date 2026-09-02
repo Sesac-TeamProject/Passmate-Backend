@@ -30,6 +30,7 @@ enum class ErrorCode(val status: HttpStatus, val message: String) {
     HOST_LEVEL_REQUIRED(HttpStatus.FORBIDDEN, "유료 방은 Lv.3 이상부터 개설할 수 있습니다."),
     ACCOUNT_SUSPENDED(HttpStatus.FORBIDDEN, "제재 중인 계정입니다."),
     GUEST_NOT_ALLOWED(HttpStatus.FORBIDDEN, "회원만 이용할 수 있습니다. 로그인해 주세요."),
+    RATING_NOT_ALLOWED(HttpStatus.FORBIDDEN, "답안을 제출한 참가자만 평가할 수 있습니다."),
 
     // 404
     NOT_FOUND(HttpStatus.NOT_FOUND, "대상을 찾을 수 없습니다."),
@@ -48,6 +49,9 @@ enum class ErrorCode(val status: HttpStatus, val message: String) {
     ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 제출한 문항입니다."),
     SCREEN_LOCKED(HttpStatus.CONFLICT, "화면이 잠겨 있어 지금은 답안을 낼 수 없습니다."),
     SESSION_ALREADY_FINISHED(HttpStatus.CONFLICT, "모든 문항이 끝났습니다."),
+    SESSION_NOT_ENDED(HttpStatus.CONFLICT, "아직 종료되지 않은 세션입니다."),
+    ALREADY_RATED(HttpStatus.CONFLICT, "이미 평가한 세션입니다."),
+    RATING_WINDOW_CLOSED(HttpStatus.CONFLICT, "평가 가능 기간이 지났습니다."),
     QUESTION_SET_REQUIRED(HttpStatus.CONFLICT, "확정된 문제 세트를 먼저 연결해 주세요."),
     NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
     ALREADY_JOINED(HttpStatus.CONFLICT, "이미 입장한 방입니다."),
