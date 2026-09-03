@@ -340,6 +340,40 @@ class SessionFlowTest : IntegrationTestSupport() {
             .andExpect(status().isUnauthorized)
     }
 
+    @Test
+    fun `참가하지 않은 회원은 세션 조회 API 를 볼 수 없다`() {
+        val outsider = jwtTokenProvider.issue(member("sess-outsider"), false).accessToken
+        start()
+
+        snapshot(outsider)
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $outsider"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        endCurrent()
+        mockMvc.perform(get("/rooms/{id}/session/questions/{q}/result", roomId, mcqId).header("Authorization", "Bearer $outsider"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+    }
+
+    @Test
+    fun `다른 방 게스트 토큰으로는 세션을 볼 수 없다`() {
+        val otherRoom = roomService.create(hostId, RoomCreateRequest(title = "다른 방", type = RoomType.FREE))
+        val foreignGuest = participantService.join(otherRoom.id, null, JoinRoomRequest(nickname = "남의방게스트")).accessToken!!
+        start()
+
+        snapshot(foreignGuest)
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $foreignGuest"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+    }
+
     // ---------- helpers ----------
 
     private fun start() = mockMvc.perform(post("/rooms/{id}/session/start", roomId).header("Authorization", "Bearer $hostToken"))
