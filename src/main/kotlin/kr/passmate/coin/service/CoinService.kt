@@ -42,7 +42,10 @@ class CoinService(
     ): CoinTransaction {
         require(amount > 0) { "차감 금액은 0보다 커야 합니다." }
         val wallet = coinWalletRepository.findByUserIdForUpdate(userId)
-            ?: throw BusinessException(ErrorCode.INSUFFICIENT_COINS)
+            ?: throw BusinessException(
+                ErrorCode.INSUFFICIENT_COINS,
+                data = CoinWallet.shortfallOf(required = amount, balance = 0),
+            )
 
         wallet.deduct(amount)
         return record(userId, type, -amount, wallet.balance, refType, refId, memo)
@@ -72,6 +75,10 @@ class CoinService(
         wallet.charge(amount)
         return record(userId, CoinTransactionType.REFUND, amount, wallet.balance, refType, refId, memo)
     }
+
+    /** 지금 잔액. 지갑이 없으면 0. 환급이 멱등으로 건너뛴 뒤 응답을 채울 때 쓴다. */
+    @Transactional(readOnly = true)
+    fun balanceOf(userId: Long): Int = coinWalletRepository.findByUserId(userId)?.balance ?: 0
 
     /**
      * 남은 코인을 전부 소멸시킨다(회원 탈퇴). 원장은 append-only 라 지우지 않고
