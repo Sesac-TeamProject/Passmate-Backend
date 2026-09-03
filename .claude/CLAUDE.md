@@ -29,7 +29,7 @@ Spring Boot 3.5 · Kotlin 2.2 · JVM 17 · MySQL 8.0 · S3 · 포트원(PortOne)
 | Google 로그인 | Google Cloud → OAuth 동의 화면 + 클라이언트 ID(웹·Android·iOS) | 웹 클라이언트 ID → `GOOGLE_CLIENT_ID` | 🟨 웹 클라이언트 ID 설정 완료 · **실제 로그인 확인은 연동 시점**(그때까지 `dev-login` 유지) |
 | AI 문제 생성 | OpenAI 콘솔에서 API 키 발급 (2026-08-31 OpenAI 로 결정) | `OPENAI_API_KEY` | ✅ 설정 완료 — **호출은 허가 후에만** |
 | 코인 충전·결제 | 포트원 가입 → 테스트 채널 · 웹훅 등록 | `PORTONE_STORE_ID` · `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` | ⬜ 대기 |
-| 파일 업로드 | S3 버킷 생성 + IAM 사용자·정책 | `S3_BUCKET` · `AWS_REGION` · 자격증명 | ⬜ 대기 |
+| 파일 업로드 | 없음 — 배포 인프라 작업으로 해결됨(2026-09-03 확인) | 버킷 `passmate-prod-storage` · SSM `S3_BUCKET` 설정됨 · 자격증명은 EC2 인스턴스 역할(키 발급 없음, IMDS hop 2 로 컨테이너 접근 가능) | ✅ 준비 완료 — 실업로드 왕복 검증만 남음(S3 호출은 허가 후) |
 | 푸시 알림 | Firebase 프로젝트 + 서비스 계정 키 | FCM 자격증명 | ⬜ 대기 |
 | 배포 | AWS 계정 · 도메인 구입 · 인증서(certbot) | EC2 · RDS · SSM 파라미터 | ⬜ 대기 |
 
@@ -199,3 +199,4 @@ sed -E 's/=.*/=***/' .env        # 키 이름만 확인
 12. `.env` 등 시크릿이 있을 수 있는 파일의 값을 출력하기 (존재 여부만 확인, 부득이하면 전량 마스킹)
 13. 사용자 확인 없이 `push` · PR 생성 · 머지 진행하기 (커밋까지만 하고 물어본다)
 14. **허가 없이 유료 외부 API(OpenAI 등) 호출하기** — 확인용 한 번도 안 된다
+15. **도메인·오리진·URL 을 코드에 하드코딩하기** — 전부 env 바인딩(`@ConfigurationProperties`)으로. 같은 값이 두 군데 쓰이면 프로퍼티를 공유한다 (WS 오리진에 옛 도메인이 박혀 운영 웹 연결이 막혔던 사고가 근거)
