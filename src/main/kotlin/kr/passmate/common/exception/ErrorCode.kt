@@ -22,6 +22,7 @@ enum class ErrorCode(val status: HttpStatus, val message: String) {
 
     // 402
     INSUFFICIENT_COINS(HttpStatus.PAYMENT_REQUIRED, "코인이 부족합니다."),
+    ENTRY_FEE_REQUIRED(HttpStatus.PAYMENT_REQUIRED, "참가비를 결제해야 입장할 수 있습니다."),
 
     // 403
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "권한이 없습니다."),

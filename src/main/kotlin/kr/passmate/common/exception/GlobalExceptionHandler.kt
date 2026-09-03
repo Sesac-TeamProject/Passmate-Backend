@@ -26,7 +26,7 @@ class GlobalExceptionHandler {
     fun handleBusiness(e: BusinessException, request: HttpServletRequest): ResponseEntity<ErrorResponse> {
         log.warn("[{}] {} {} — {}", e.errorCode.name, request.method, request.requestURI, e.message, e.cause)
         return ResponseEntity.status(e.errorCode.status)
-            .body(ErrorResponse.of(e.errorCode, e.message))
+            .body(ErrorResponse.of(e.errorCode, e.message, e.data))
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)

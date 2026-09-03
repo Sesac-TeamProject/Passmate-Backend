@@ -50,11 +50,16 @@ class CoinWallet(
         lastTransactionAt = at
     }
 
-    /** 차감 — 잔액이 모자라면 402 로 막는다. DB 의 chk_coin_wallet_balance 와 이중으로 지킨다. */
+    /**
+     * 차감 — 잔액이 모자라면 402 로 막는다. DB 의 chk_coin_wallet_balance 와 이중으로 지킨다.
+     *
+     * 부족할 때는 **얼마나 모자란지**를 함께 던진다. 화면이 "8,800 C 충전 필요"를
+     * 그려야 하는데, 잔액을 다시 조회하면 그 사이 값이 바뀔 수 있다.
+     */
     fun deduct(amount: Int, at: LocalDateTime = LocalDateTime.now()) {
         require(amount > 0) { "차감 금액은 0보다 커야 합니다." }
         if (balance < amount) {
-            throw BusinessException(ErrorCode.INSUFFICIENT_COINS)
+            throw BusinessException(ErrorCode.INSUFFICIENT_COINS, data = shortfallOf(amount, balance))
         }
         balance -= amount
         lastTransactionAt = at
@@ -62,5 +67,14 @@ class CoinWallet(
 
     fun changeDefaultPaymentMethod(method: String?) {
         defaultPaymentMethod = method
+    }
+
+    companion object {
+        /** 402 응답에 실을 부족분. 지갑이 아예 없는 경우에도 같은 모양을 쓴다 */
+        fun shortfallOf(required: Int, balance: Int): Map<String, Any> = mapOf(
+            "required" to required,
+            "balance" to balance,
+            "shortfall" to (required - balance).coerceAtLeast(0),
+        )
     }
 }

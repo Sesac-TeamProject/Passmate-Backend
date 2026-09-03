@@ -42,7 +42,10 @@ class CoinService(
     ): CoinTransaction {
         require(amount > 0) { "차감 금액은 0보다 커야 합니다." }
         val wallet = coinWalletRepository.findByUserIdForUpdate(userId)
-            ?: throw BusinessException(ErrorCode.INSUFFICIENT_COINS)
+            ?: throw BusinessException(
+                ErrorCode.INSUFFICIENT_COINS,
+                data = CoinWallet.shortfallOf(required = amount, balance = 0),
+            )
 
         wallet.deduct(amount)
         return record(userId, type, -amount, wallet.balance, refType, refId, memo)
