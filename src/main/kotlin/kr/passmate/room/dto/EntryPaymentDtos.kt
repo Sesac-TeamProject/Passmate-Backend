@@ -31,3 +31,29 @@ data class EntryPaymentResponse(
         )
     }
 }
+
+/** 참가비 취소 결과 (FR-052). 코인으로 돌려준 것이지 현금 환불이 아니다. */
+@Schema(description = "참가비 취소")
+data class EntryPaymentCancelResponse(
+    val paymentId: Long,
+    val paymentNo: String,
+    val roomId: Long,
+    val status: EntryPaymentStatus,
+    @field:Schema(description = "돌려준 코인. 항상 결제 전액이다")
+    val refundedAmount: Int,
+    @field:Schema(description = "환급 후 코인 잔액")
+    val balanceAfter: Int,
+    val refundedAt: LocalDateTime?,
+) {
+    companion object {
+        fun of(payment: EntryPayment, balanceAfter: Int) = EntryPaymentCancelResponse(
+            paymentId = payment.id,
+            paymentNo = payment.paymentNo,
+            roomId = payment.roomId,
+            status = payment.status,
+            refundedAmount = payment.amount,
+            balanceAfter = balanceAfter,
+            refundedAt = payment.refundedAt,
+        )
+    }
+}

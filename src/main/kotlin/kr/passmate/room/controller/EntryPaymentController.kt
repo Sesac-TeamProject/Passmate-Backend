@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.passmate.common.security.CurrentUser
 import kr.passmate.common.security.UserPrincipal
+import kr.passmate.room.dto.EntryPaymentCancelResponse
 import kr.passmate.room.dto.EntryPaymentResponse
 import kr.passmate.room.service.EntryPaymentService
 import org.springframework.http.HttpStatus
@@ -34,4 +35,15 @@ class EntryPaymentController(
         @CurrentUser principal: UserPrincipal,
         @PathVariable roomId: Long,
     ): EntryPaymentResponse = entryPaymentService.pay(roomId, principal.userId)
+
+    @Operation(
+        summary = "참가비 취소(코인 환급)",
+        description = "세션 시작 전까지만. 차감한 코인을 전액 돌려준다(현금 환불이 아니다). " +
+            "입장해 있었다면 방에서도 빠진다.",
+    )
+    @PostMapping("/entry-payments/{paymentId}/cancel")
+    fun cancel(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable paymentId: Long,
+    ): EntryPaymentCancelResponse = entryPaymentService.cancel(paymentId, principal.userId)
 }

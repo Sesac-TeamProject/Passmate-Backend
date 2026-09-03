@@ -9,8 +9,11 @@ import kr.passmate.room.domain.EntryPayment
 import kr.passmate.room.domain.EntryPaymentStatus
 import kr.passmate.room.domain.Room
 import kr.passmate.room.domain.RoomType
+import kr.passmate.room.dto.EntryPaymentCancelResponse
 import kr.passmate.room.dto.EntryPaymentResponse
+import kr.passmate.room.domain.ParticipantStatus
 import kr.passmate.room.repository.EntryPaymentRepository
+import kr.passmate.room.repository.ParticipantRepository
 import kr.passmate.room.repository.RoomRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -29,6 +32,7 @@ import kotlin.random.Random
 class EntryPaymentService(
     private val roomRepository: RoomRepository,
     private val entryPaymentRepository: EntryPaymentRepository,
+    private val participantRepository: ParticipantRepository,
     private val coinService: CoinService,
 ) {
 
@@ -70,6 +74,51 @@ class EntryPaymentService(
             memo = "${room.title} · ${payment.paymentNo}",
         )
         return EntryPaymentResponse.of(payment, transaction.balanceAfter)
+    }
+
+    /**
+     * 참가 취소 — 차감한 코인을 **전액** 돌려준다(FR-052). 현금 환불이 아니다.
+     *
+     * 되돌릴 수 있는 것은 세션 시작 전까지다. 시작한 뒤에는 이미 제공된 세션이라
+     * 학생 사유 이탈에 환급하지 않는다(일시 장애는 재접속으로 복구한다).
+     */
+    @Transactional
+    fun cancel(paymentId: Long, userId: Long, now: LocalDateTime = LocalDateTime.now()): EntryPaymentCancelResponse {
+        val payment = entryPaymentRepository.findByIdForUpdate(paymentId)
+            ?: throw BusinessException(ErrorCode.NOT_FOUND, "결제를 찾을 수 없습니다.")
+        payment.verifyOwner(userId)
+
+        val room = roomRepository.findByIdForUpdate(payment.roomId)
+            ?: throw BusinessException(ErrorCode.ROOM_NOT_FOUND)
+        if (room.startedAt != null) {
+            throw BusinessException(ErrorCode.REFUND_WINDOW_CLOSED)
+        }
+
+        // 상태를 먼저 바꾼다 — 이미 환급된 건이면 여기서 409 로 끊겨 코인이 두 번 나가지 않는다
+        payment.refund(REASON_SELF_CANCEL, refundedByUserId = userId, at = now)
+        releaseParticipant(room, payment.participantId)
+
+        val transaction = coinService.refund(
+            userId = userId,
+            amount = payment.amount,
+            refType = CoinRefType.ENTRY_PAYMENT,
+            refId = payment.id,
+            memo = "${room.title} · ${payment.paymentNo} 취소",
+        )
+        // refund 는 멱등이라 이미 돌려준 건이면 null 을 준다. 그때는 현재 잔액을 그대로 쓴다
+        val balanceAfter = transaction?.balanceAfter ?: coinService.balanceOf(userId)
+        return EntryPaymentCancelResponse.of(payment, balanceAfter)
+    }
+
+    /**
+     * 취소했으면 방에서도 빠진다 — 자리를 잡은 채 참가비만 돌려받으면
+     * 정원이 있는 방에서 남의 자리를 막는다.
+     */
+    private fun releaseParticipant(room: Room, participantId: Long?) {
+        val participant = participantId?.let { participantRepository.findById(it).orElse(null) } ?: return
+        if (participant.status != ParticipantStatus.JOINED) return
+        participant.leave()
+        room.decreaseParticipantCount()
     }
 
     /**
@@ -116,6 +165,7 @@ class EntryPaymentService(
     }
 
     companion object {
+        private const val REASON_SELF_CANCEL = "학생 취소"
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MMdd")
         private const val PAYMENT_NO_ATTEMPTS = 10
         private const val SUFFIX_BOUND = 10_000

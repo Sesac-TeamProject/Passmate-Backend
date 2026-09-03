@@ -76,6 +76,10 @@ class CoinService(
         return record(userId, CoinTransactionType.REFUND, amount, wallet.balance, refType, refId, memo)
     }
 
+    /** 지금 잔액. 지갑이 없으면 0. 환급이 멱등으로 건너뛴 뒤 응답을 채울 때 쓴다. */
+    @Transactional(readOnly = true)
+    fun balanceOf(userId: Long): Int = coinWalletRepository.findByUserId(userId)?.balance ?: 0
+
     /**
      * 남은 코인을 전부 소멸시킨다(회원 탈퇴). 원장은 append-only 라 지우지 않고
      * 반대 부호 한 줄을 쌓아 0 으로 만든다 — 나중에 "코인이 어디로 갔나"를 되짚을 수 있어야 한다.
