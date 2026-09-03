@@ -59,6 +59,8 @@ passmate:
   policy:
     entry-fee-min: 100                 # 참가비 하한 (코인, 1 C = 1원)
     entry-fee-max: 10000               # 참가비 상한
+    charge-amount-min: 1000            # 코인 충전 1회 하한
+    charge-amount-max: 1000000         # 코인 충전 1회 상한 (오입력·악용 방지)
     settlement-min-amount: 10000       # 최소 정산액 (원)
     ai-free-limit: 5                   # AI 문항 생성 무료 횟수 (호스트, 누적 — 명세 "최초 5회 무료")
     essay-analysis-free-limit: 5       # 월 서술형 AI 분석 무료 횟수 (학생, FR-075)

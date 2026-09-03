@@ -56,6 +56,8 @@ enum class ErrorCode(val status: HttpStatus, val message: String) {
     GUEST_RECORD_EXPIRED(HttpStatus.CONFLICT, "보관 기한이 지나 기록이 파기되었습니다."),
     GUEST_RECORD_ALREADY_CLAIMED(HttpStatus.CONFLICT, "이미 계정에 연동된 기록입니다."),
     ALREADY_PAID(HttpStatus.CONFLICT, "이미 참가비를 결제한 방입니다."),
+    PAYMENT_NOT_COMPLETED(HttpStatus.CONFLICT, "아직 결제가 완료되지 않았습니다."),
+    PAYMENT_AMOUNT_MISMATCH(HttpStatus.CONFLICT, "결제 금액이 요청 금액과 일치하지 않습니다."),
     ALREADY_REFUNDED(HttpStatus.CONFLICT, "이미 환급된 결제입니다."),
     REFUND_WINDOW_CLOSED(HttpStatus.CONFLICT, "세션이 시작되어 참가비를 돌려드릴 수 없습니다."),
     NOT_PAID_ROOM(HttpStatus.CONFLICT, "참가비를 받지 않는 방입니다."),
