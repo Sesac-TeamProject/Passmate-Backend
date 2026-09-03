@@ -1,4 +1,4 @@
-package kr.passmate.coin.client
+package kr.passmate.ai.client
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -7,16 +7,17 @@ import org.springframework.web.client.RestClient
 import java.time.Duration
 
 /**
- * 포트원 호출용 RestClient.
+ * OpenAI 호출용 RestClient.
  *
  * base URL·타임아웃을 **클라이언트 바깥**에서 잡는다 — 클라이언트가 스스로 요청 팩토리를
- * 갈아끼우면 테스트가 붙인 목 서버까지 밀어내 실제 결제 API 로 요청이 나간다.
+ * 갈아끼우면 테스트가 붙인 목 서버까지 밀어내 실제 OpenAI 로 요청이 나간다.
+ * 유료 API 라 그 사고의 대가가 크다(.claude/CLAUDE.md ⛔ 규칙).
  */
 @Configuration
-class PortOneClientConfig {
+class AiClientConfig {
 
-    @Bean(PORTONE_REST_CLIENT)
-    fun portOneRestClient(builder: RestClient.Builder, properties: PortOneProperties): RestClient =
+    @Bean(OPENAI_REST_CLIENT)
+    fun openAiRestClient(builder: RestClient.Builder, properties: AiProperties): RestClient =
         builder
             .baseUrl(properties.baseUrl)
             .requestFactory(
@@ -29,8 +30,8 @@ class PortOneClientConfig {
 
     companion object {
         /** RestClient 빈이 여럿이라 이름으로 구분한다 */
-        const val PORTONE_REST_CLIENT = "portOneRestClient"
+        const val OPENAI_REST_CLIENT = "openAiRestClient"
 
-        private val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(5)
+        private val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(10)
     }
 }

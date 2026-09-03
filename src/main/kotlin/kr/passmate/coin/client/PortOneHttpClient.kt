@@ -6,6 +6,8 @@ import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
+import kr.passmate.coin.client.PortOneClientConfig.Companion.PORTONE_REST_CLIENT
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
@@ -27,7 +29,7 @@ class PortOneHttpClient(
      * base URL·타임아웃이 이미 잡힌 것을 받는다. 여기서 요청 팩토리를 갈아끼우면
      * 테스트가 붙인 목 서버까지 함께 밀어내 실제 포트원으로 요청이 나간다
      */
-    private val restClient: RestClient,
+    @Qualifier(PORTONE_REST_CLIENT) private val restClient: RestClient,
 ) : PortOneClient {
 
     private val log = LoggerFactory.getLogger(javaClass)
