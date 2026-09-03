@@ -26,15 +26,15 @@ Spring Boot 3.5 · Kotlin 2.2 · JVM 17 · MySQL 8.0 · S3 · 포트원(PortOne)
 
 | 기능 | 사용자가 할 일 | 받는 값 → 넣을 곳 | 상태 |
 |---|---|---|---|
-| Google 로그인 | Google Cloud → OAuth 동의 화면 + 클라이언트 ID(웹·Android·iOS) | 웹 클라이언트 ID → `GOOGLE_CLIENT_ID` | 🟨 웹 클라이언트 ID 설정 완료 · **실제 로그인 확인은 연동 시점**(그때까지 `dev-login` 유지) |
+| Google 로그인 | Google Cloud → OAuth 동의 화면 + 클라이언트 ID(웹·Android·iOS) | 웹 클라이언트 ID → `GOOGLE_CLIENT_ID` | 🟨 웹 클라이언트 ID 설정 완료 · 도메인이 생겨 **운영 리디렉션 URI 등록이 가능해짐**(2026-09-03) · 실제 로그인 확인은 연동 시점(그때까지 `dev-login` 유지) |
 | AI 문제 생성 | OpenAI 콘솔에서 API 키 발급 (2026-08-31 OpenAI 로 결정) | `OPENAI_API_KEY` | ✅ 설정 완료 — **호출은 허가 후에만** |
-| 코인 충전·결제 | 포트원 가입 → 테스트 채널 · 웹훅 등록 | `PORTONE_STORE_ID` · `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` | ⬜ 대기 |
-| 파일 업로드 | S3 버킷 생성 + IAM 사용자·정책 | `S3_BUCKET` · `AWS_REGION` · 자격증명 | ⬜ 대기 |
+| 코인 충전·결제 | 없음 — 네 값 설정 완료 | `PORTONE_STORE_ID` · `PORTONE_CHANNEL_KEY` · `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` | ✅ **실호출 검증됨** (2026-09-03) — 결제창 실제 노출, 조회 API 인증 통과, `status=READY` 를 읽어 409 `PAYMENT_NOT_COMPLETED` 반환. 남은 것은 **status=PAID 실결제 1건**(카드 입력 필요)과 **웹훅 수신**(배포 후에만 가능). **운영도 테스트 채널로 간다**(실결제 없음, PG 실계약 불필요) |
+| 파일 업로드 | 없음 — 배포 인프라 작업으로 해결됨(2026-09-03 확인) | 버킷 `passmate-prod-storage` · SSM `S3_BUCKET` 설정됨 · 자격증명은 EC2 인스턴스 역할(키 발급 없음, IMDS hop 2 로 컨테이너 접근 가능) | ✅ 준비 완료 — 실업로드 왕복 검증만 남음(S3 호출은 허가 후) |
 | 푸시 알림 | Firebase 프로젝트 + 서비스 계정 키 | FCM 자격증명 | ⬜ 대기 |
-| 배포 | AWS 계정 · 도메인 구입 · 인증서(certbot) | EC2 · RDS · SSM 파라미터 | ⬜ 대기 |
+| 배포 | 없음 — 완료(2026-09-03 확인) | `passmate.kr` · `api.passmate.kr` · Let's Encrypt(자동 갱신) · EC2 + SSM | ✅ 운영 가동 중 — `https://api.passmate.kr/actuator/health` 200 |
 
 > 앱(Android·iOS)은 자기 클라이언트 ID가 아니라 **웹 클라이언트 ID를 `serverClientId`로** 지정해 ID 토큰을 받아야 `aud` 검증을 통과한다.
-> 운영 리디렉션 URI 등록에는 **https 도메인**이 필요하므로 도메인·인증서가 Google 설정의 선행 조건이다.
+> 운영 도메인·인증서는 확보됐다(`passmate.kr` · `api.passmate.kr`) — https 를 선행 조건으로 삼던 항목들은 더 이상 막혀 있지 않다.
 
 ## 문서 (진실의 원천)
 
@@ -169,7 +169,10 @@ sed -E 's/=.*/=***/' .env        # 키 이름만 확인
 - 상시 브랜치는 **`main` · `develop`** 둘. `main`은 배포 가능한 상태만 담고, 개발은 전부 `develop`에서 한다 — **push도 `develop`으로** 한다
 - `main`에 직접 커밋·push 금지. `develop` → `main`은 PR로만 병합하고, 그 병합이 배포 트리거다
 - **모든 작업은 `develop`에서 분기한다** — `feat/…` · `fix/…` 브랜치를 파서 작업하고 PR로 `develop`에 병합한다. 예외 없음
-- 커밋 메시지는 한국어, 형식 `feat: 방 생성 API 구현`
+- 커밋 메시지는 한국어. **제목도 본문도 명사(구)로 끝낸다** — `~한다` · `~했다` 로 풀어쓰지 않는다
+  - 제목: `feat: 방 생성 API 구현` (O) / `feat: 방 생성 API 를 구현했다` (X)
+  - 본문: `- 이중 환급은 ALREADY_REFUNDED 로 차단` (O) / `- 이중 환급을 막는다` (X)
+  - 본문은 불릿으로. 이유를 적을 때는 `— ` 뒤에 명사구로 잇는다 (`… room 소유 — 입장 게이트를 room 안에서 닫기 위함`)
 - **커밋은 되돌릴 수 있는 단위로 쪼갠다.** 한 커밋 = 한 관심사, 그리고 **각 커밋은 그 자체로 빌드가 되어야** 롤백 지점이 된다. 파일 10개·500줄을 넘어가면 쪼갤 자리를 찾는다
 - 테스트는 대상 코드와 **같은 커밋**에 넣는다. 테스트만 따로 커밋하면 롤백 지점이 '테스트 없는 상태'가 된다
 - **커밋까지만 알아서 하고 멈춘다. `push` · PR 생성 · 머지는 매번 사용자에게 물어보고 진행한다** — 원격을 바꾸는 일은 사용자 결정이다
@@ -199,3 +202,4 @@ sed -E 's/=.*/=***/' .env        # 키 이름만 확인
 12. `.env` 등 시크릿이 있을 수 있는 파일의 값을 출력하기 (존재 여부만 확인, 부득이하면 전량 마스킹)
 13. 사용자 확인 없이 `push` · PR 생성 · 머지 진행하기 (커밋까지만 하고 물어본다)
 14. **허가 없이 유료 외부 API(OpenAI 등) 호출하기** — 확인용 한 번도 안 된다
+15. **도메인·오리진·URL 을 코드에 하드코딩하기** — 전부 env 바인딩(`@ConfigurationProperties`)으로. 같은 값이 두 군데 쓰이면 프로퍼티를 공유한다 (WS 오리진에 옛 도메인이 박혀 운영 웹 연결이 막혔던 사고가 근거)

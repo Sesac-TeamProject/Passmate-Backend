@@ -1,33 +1,13 @@
 package kr.passmate.report.service
 
-import kr.passmate.common.exception.BusinessException
-import kr.passmate.common.exception.ErrorCode
+import kr.passmate.common.export.CsvBuilder
+import kr.passmate.common.export.ExportFormat
+import kr.passmate.common.export.ExportedFile
 import kr.passmate.feedback.service.AnswerFeedbackQueryService
 import kr.passmate.room.service.RoomQueryService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.format.DateTimeFormatter
-
-/** 내보낼 파일 형식. PDF 는 아직 지원하지 않는다 — 요청이 오면 무엇이 되는지 알려 준다. */
-enum class ExportFormat {
-    CSV,
-    ;
-
-    companion object {
-        fun of(raw: String): ExportFormat = entries.firstOrNull { it.name.equals(raw, ignoreCase = true) }
-            ?: throw BusinessException(ErrorCode.INVALID_INPUT, "지금은 csv 로만 내보낼 수 있습니다.")
-    }
-}
-
-/** 내보낸 파일 한 벌. 파일명은 서버가 정한다 — 클라이언트가 붙이면 방마다 제각각이 된다. */
-data class ExportedFile(
-    val fileName: String,
-    val contentType: String,
-    val content: ByteArray,
-) {
-    override fun equals(other: Any?) = this === other
-    override fun hashCode() = System.identityHashCode(this)
-}
 
 /**
  * 방 리포트 내보내기 (US5). 세션 요약 · 문항별 · 학생별을 한 파일에 담는다.

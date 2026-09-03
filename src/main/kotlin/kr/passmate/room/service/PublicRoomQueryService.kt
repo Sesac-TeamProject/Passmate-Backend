@@ -1,5 +1,6 @@
 package kr.passmate.room.service
 
+import kr.passmate.moderation.service.UserBlockQueryService
 import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.room.domain.Room
 import kr.passmate.room.domain.RoomStatus
@@ -29,11 +30,16 @@ import java.time.LocalDateTime
 @Transactional(readOnly = true)
 class PublicRoomQueryService(
     private val roomRepository: RoomRepository,
+    private val userBlockQueryService: UserBlockQueryService,
     private val userQueryService: UserQueryService,
     private val questionSetQueryService: QuestionSetQueryService,
 ) {
 
-    fun search(request: PublicRoomSearchRequest): Page<PublicRoomResponse> {
+    /**
+     * [viewerUserId] 가 차단한 호스트의 방은 빼고 준다(FR-054 · FR-067).
+     * 거르기는 **쿼리 안에서** 한다 — 가져온 뒤 걸러 내면 페이지마다 개수가 들쭉날쭉해진다.
+     */
+    fun search(request: PublicRoomSearchRequest, viewerUserId: Long? = null): Page<PublicRoomResponse> {
         val pageable = request.toPageable()
         val keyword = request.q?.trim()?.takeIf { it.isNotEmpty() }
 
@@ -44,14 +50,18 @@ class PublicRoomQueryService(
             ?.takeIf { it.isNotEmpty() }
             ?: listOf(NO_MATCH_ID)
 
+        // in/not in 절은 빈 목록을 못 받는다. 아무것도 안 가릴 때는 맞을 리 없는 id 하나를 넣는다
+        val blockedHostIds = userBlockQueryService.blockedIdsOfOrEmpty(viewerUserId)
+            .takeIf { it.isNotEmpty() } ?: listOf(NO_MATCH_ID)
+
         val (from, to) = todayRange(request.today)
         val page = when (request.sort) {
             PublicRoomSort.POPULAR -> roomRepository.findPublicByPopularity(
-                statuses(request.status), roomType(request.type), keyword, hostIds, from, to, pageable,
+                statuses(request.status), roomType(request.type), keyword, hostIds, blockedHostIds, from, to, pageable,
             )
 
             PublicRoomSort.UPCOMING -> roomRepository.findPublicByUpcoming(
-                statuses(request.status), roomType(request.type), keyword, hostIds, from, to, pageable,
+                statuses(request.status), roomType(request.type), keyword, hostIds, blockedHostIds, from, to, pageable,
             )
         }
         return page.map(toResponse(page.content))
@@ -61,6 +71,18 @@ class PublicRoomQueryService(
      * 카드에 필요한 호스트 닉네임·문항 수를 **한 번씩만** 조회해 붙인다.
      * 방마다 따로 부르면 페이지 크기만큼 쿼리가 늘어난다(N+1).
      */
+    /**
+     * 이 선생님이 지금 열어 둔 공개 방(운영 중·예정). 공개 프로필의 "참여하기" 목록이다.
+     *
+     * **공개로 설정한 방만** 내보낸다 — 프로필은 누구나 보는 화면이라
+     * 비공개 방까지 실으면 링크로만 돌리려던 방이 그대로 드러난다.
+     */
+    fun openRoomsOfHost(hostUserId: Long): List<PublicRoomResponse> {
+        val rooms = roomRepository
+            .findAllByHostUserIdAndStatusInAndIsPublicTrueOrderByIdDesc(hostUserId, OPEN_STATUSES)
+        return rooms.map(toResponse(rooms))
+    }
+
     private fun toResponse(rooms: List<Room>): (Room) -> PublicRoomResponse {
         val nicknames = userQueryService.getNicknames(rooms.map { it.hostUserId })
         val questionCounts = questionSetQueryService.getQuestionCounts(rooms.mapNotNull { it.questionSetId })

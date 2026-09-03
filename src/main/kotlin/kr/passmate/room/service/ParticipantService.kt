@@ -35,6 +35,7 @@ class ParticipantService(
     private val participantRepository: ParticipantRepository,
     private val userService: UserService,
     private val jwtTokenProvider: JwtTokenProvider,
+    private val entryPaymentService: EntryPaymentService,
 ) {
 
     /**
@@ -69,6 +70,10 @@ class ParticipantService(
             ),
         )
         room.increaseParticipantCount()
+
+        // 유료 방은 살아 있는 참가비 결제가 있어야 들어온다(FR-051).
+        // 게이트는 서버에만 있다 — 결제 화면을 건너뛰고 이 API 를 바로 불러도 막힌다
+        entryPaymentService.consumeForJoin(room, userId, participant.id)
 
         return JoinResult(
             participant = participant,

@@ -29,9 +29,9 @@ class Participant(
     @Column(name = "avatar_id", nullable = false, length = 30)
     val avatarId: String,
 
-    /** NULL = 게스트 */
-    @Column(name = "user_id", updatable = false)
-    val userId: Long? = null,
+    /** NULL = 게스트. 게스트 기록을 계정에 연동하면(FR-036) 이때 채워진다 */
+    @Column(name = "user_id")
+    var userId: Long? = null,
 
     /** 게스트 식별자. 회원이면 NULL */
     @Column(name = "guest_token", length = 64, updatable = false)
@@ -87,6 +87,20 @@ class Participant(
         verifyJoined()
         status = ParticipantStatus.KICKED
         leftAt = at
+    }
+
+    /**
+     * 게스트 기록을 계정에 연동한다 (FR-036).
+     *
+     * 닉네임·아바타는 그대로 둔다 — 그 세션에서 다른 사람들이 본 이름이라
+     * 회원 프로필 이름으로 바꾸면 지난 결과 화면의 등수 표와 어긋난다.
+     */
+    fun claim(userId: Long, at: LocalDateTime = LocalDateTime.now()) {
+        if (claimedAt != null) {
+            throw BusinessException(ErrorCode.CONFLICT, "이미 계정에 연동된 기록입니다.")
+        }
+        this.userId = userId
+        this.claimedAt = at
     }
 
     private fun verifyJoined() {

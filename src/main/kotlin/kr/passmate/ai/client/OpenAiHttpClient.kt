@@ -9,7 +9,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
-import org.springframework.http.client.SimpleClientHttpRequestFactory
+import kr.passmate.ai.client.AiClientConfig.Companion.OPENAI_REST_CLIENT
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
@@ -30,20 +31,14 @@ import java.time.Duration
 class OpenAiHttpClient(
     private val properties: AiProperties,
     private val objectMapper: ObjectMapper,
-    restClientBuilder: RestClient.Builder,
+    /**
+     * base URL·타임아웃이 이미 잡힌 것을 받는다. 여기서 요청 팩토리를 갈아끼우면
+     * 테스트가 붙인 목 서버까지 함께 밀어내 **실제 OpenAI 로 요청이 나간다**
+     */
+    @Qualifier(OPENAI_REST_CLIENT) private val restClient: RestClient,
 ) : OpenAiClient {
 
     private val log = LoggerFactory.getLogger(javaClass)
-
-    private val restClient: RestClient = restClientBuilder
-        .baseUrl(properties.baseUrl)
-        .requestFactory(
-            SimpleClientHttpRequestFactory().apply {
-                setConnectTimeout(CONNECT_TIMEOUT)
-                setReadTimeout(properties.timeout)
-            },
-        )
-        .build()
 
     override val isConfigured: Boolean get() = properties.isConfigured
 
@@ -251,7 +246,6 @@ class OpenAiHttpClient(
 
     private companion object {
         const val CHAT_COMPLETIONS_PATH = "/chat/completions"
-        val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(10)
 
         private fun stringArray() = mapOf("type" to "array", "items" to mapOf("type" to "string"))
 

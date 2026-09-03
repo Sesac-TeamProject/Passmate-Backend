@@ -47,6 +47,14 @@ class SecurityConfig(
                 // 홈 인기 방·탐색은 게스트도 본다(FR-054). PIN 은 응답에 넣지 않는다
                 it.requestMatchers(HttpMethod.GET, "/rooms/public").permitAll()
                 it.requestMatchers(HttpMethod.GET, "/rooms/pin/*").permitAll()
+                // 광고는 결과 화면·대기실 배너에 뜬다 — 게스트도 봐야 한다(FR-073)
+                it.requestMatchers(HttpMethod.GET, "/ads").permitAll()
+                it.requestMatchers(HttpMethod.POST, "/ads/*/events").permitAll()
+                // 포트원이 부르는 서버 간 호출이라 우리 토큰이 있을 수 없다.
+                // 방벽은 인증이 아니라 웹훅 서명이다(PortOneWebhookVerifier)
+                it.requestMatchers(HttpMethod.POST, "/webhooks/portone").permitAll()
+                // 선생님 공개 프로필은 탐색에서 로그인 없이 열린다(FR-066)
+                it.requestMatchers(HttpMethod.GET, "/users/*/profile").permitAll()
                 it.requestMatchers(HttpMethod.GET, "/rooms/*/participants/nickname-check").permitAll()
                 it.requestMatchers(HttpMethod.POST, "/rooms/*/participants").permitAll()
                 it.requestMatchers("/admin/**").hasRole("ADMIN")

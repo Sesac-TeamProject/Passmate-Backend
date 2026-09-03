@@ -23,4 +23,4 @@ passmate:
     bucket: ${S3_BUCKET:passmate-local}
   cors:
     # 로컬은 프런트 개발 서버 포트가 유동적이라(Vite 5173 · Next 3000 …) 와일드카드로 연다
-    allowed-origins: http://localhost:*,http://127.0.0.1:*
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}

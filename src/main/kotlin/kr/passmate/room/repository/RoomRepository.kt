@@ -33,9 +33,61 @@ interface RoomRepository : JpaRepository<Room, Long> {
     fun countByHostUserId(hostUserId: Long): Long
 
     /** 아직 안 끝난 내 방이 있는지. 탈퇴를 막는 조건이다. */
+    /** 아직 안 끝난 방이 이 세트를 물고 있는지. 세트 삭제가 그 방의 출제 근거를 지우지 않게 막는 데 쓴다. */
+    fun existsByQuestionSetIdAndStatusIn(questionSetId: Long, statuses: Collection<RoomStatus>): Boolean
+
     fun existsByHostUserIdAndStatusIn(hostUserId: Long, statuses: Collection<RoomStatus>): Boolean
 
     fun countByHostUserIdAndStatus(hostUserId: Long, status: RoomStatus): Long
+
+    /**
+     * 방 운영 횟수 (FR-045). **시작해서 종료까지 간 방만** 센다 —
+     * 만들어만 놓고 닫은 방은 운영한 것이 아니라 등급에 넣지 않는다.
+     */
+    fun countByHostUserIdAndStatusAndStartedAtIsNotNull(hostUserId: Long, status: RoomStatus): Long
+
+    /** 유지 판정 기간 안에 끝낸 세션 수(FR-047). */
+    fun countByHostUserIdAndStatusAndEndedAtGreaterThanEqual(
+        hostUserId: Long,
+        status: RoomStatus,
+        endedAt: java.time.LocalDateTime,
+    ): Long
+
+    /** 개설한 유료 방 수. 뱃지 "유료 방 첫 개설" 이 쓴다. */
+    fun countByHostUserIdAndType(hostUserId: Long, type: kr.passmate.room.domain.RoomType): Long
+
+    /** 공개된 운영 중·예정 방. 선생님 공개 프로필의 "참여하기" 목록이다. */
+    fun findAllByHostUserIdAndStatusInAndIsPublicTrueOrderByIdDesc(
+        hostUserId: Long,
+        statuses: Collection<RoomStatus>,
+    ): List<Room>
+
+    /**
+     * 세션을 끝낸 날짜들(중복 제거·내림차순). 연속 활동 일수 뱃지가 쓴다 —
+     * 세션 수가 아니라 "며칠 연속인가"라서 날짜 단위로 봐야 한다.
+     */
+    @Query(
+        """
+        select distinct function('date', r.endedAt)
+        from Room r
+        where r.hostUserId = :hostUserId and r.status = :status and r.endedAt is not null
+        order by function('date', r.endedAt) desc
+        """,
+    )
+    fun findEndedDates(
+        @Param("hostUserId") hostUserId: Long,
+        @Param("status") status: RoomStatus,
+    ): List<java.sql.Date>
+
+    /** 세션을 한 번이라도 진행한 적 있는 호스트 전부. 등급 판정 배치가 훑는다. */
+    @Query(
+        """
+        select distinct r.hostUserId
+        from Room r
+        where r.status = :status and r.startedAt is not null
+        """,
+    )
+    fun findHostUserIdsWithEndedSession(@Param("status") status: RoomStatus): List<Long>
 
     /** 누적 학생 수. 방마다 캐시해 둔 participant_count 를 더한다 — 참가자 행을 다시 세지 않는다. */
     @Query(
@@ -67,6 +119,7 @@ interface RoomRepository : JpaRepository<Room, Long> {
         @Param("type") type: RoomType?,
         @Param("q") q: String?,
         @Param("hostIds") hostIds: Collection<Long>,
+        @Param("blockedHostIds") blockedHostIds: Collection<Long>,
         @Param("from") from: LocalDateTime?,
         @Param("to") to: LocalDateTime?,
         pageable: Pageable,
@@ -82,6 +135,7 @@ interface RoomRepository : JpaRepository<Room, Long> {
         @Param("type") type: RoomType?,
         @Param("q") q: String?,
         @Param("hostIds") hostIds: Collection<Long>,
+        @Param("blockedHostIds") blockedHostIds: Collection<Long>,
         @Param("from") from: LocalDateTime?,
         @Param("to") to: LocalDateTime?,
         pageable: Pageable,
@@ -101,6 +155,7 @@ interface RoomRepository : JpaRepository<Room, Long> {
                    or lower(r.title) like lower(concat('%', :q, '%'))
                    or lower(r.topic) like lower(concat('%', :q, '%'))
                    or r.hostUserId in :hostIds)
+              and r.hostUserId not in :blockedHostIds
         """
 
         private const val ORDER_BY_POPULAR = """

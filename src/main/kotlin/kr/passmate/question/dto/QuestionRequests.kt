@@ -17,6 +17,13 @@ data class QuestionSetCreateRequest(
     val description: String? = null,
 )
 
+@Schema(description = "문제 세트 복제 요청 — 제목만 골라서 바꿀 수 있다")
+data class QuestionSetDuplicateRequest(
+    @field:Schema(description = "사본 제목. 비우면 원본 제목 뒤에 \"(복사본)\" 이 붙는다")
+    @field:Size(max = 100)
+    val title: String? = null,
+)
+
 @Schema(description = "문제 세트 수정 요청 — 확정 전에만 가능")
 data class QuestionSetUpdateRequest(
     @field:NotBlank(message = "세트 제목은 필수입니다.")

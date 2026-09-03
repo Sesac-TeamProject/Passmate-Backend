@@ -47,6 +47,16 @@ class QuestionSetQueryService(
         return questionSetRepository.findAllById(setIds.toSet()).associate { it.id to it.questionCount }
     }
 
+    /**
+     * 문항이 있는지만 본다(신고 접수). 세트 소유자가 아니어도 확인할 수 있어야 한다 —
+     * 신고하는 사람은 그 방 학생이지 세트 주인이 아니다.
+     */
+    fun verifyQuestionExists(questionId: Long) {
+        if (!questionRepository.existsById(questionId)) {
+            throw BusinessException(ErrorCode.QUESTION_NOT_FOUND)
+        }
+    }
+
     fun getOwnedSet(setId: Long, ownerUserId: Long): QuestionSet {
         val set = questionSetRepository.findByIdAndDeletedAtIsNull(setId)
             ?: throw BusinessException(ErrorCode.QUESTION_SET_NOT_FOUND)

@@ -12,6 +12,7 @@ import kr.passmate.question.dto.QuestionRequest
 import kr.passmate.question.dto.QuestionResponse
 import kr.passmate.question.dto.QuestionSetCreateRequest
 import kr.passmate.question.dto.QuestionSetDetailResponse
+import kr.passmate.question.dto.QuestionSetDuplicateRequest
 import kr.passmate.question.dto.QuestionSetSummaryResponse
 import kr.passmate.question.dto.QuestionSetUpdateRequest
 import kr.passmate.question.service.QuestionGenerationService
@@ -94,6 +95,33 @@ class QuestionSetController(
         @PathVariable setId: Long,
     ): QuestionSetSummaryResponse =
         QuestionSetSummaryResponse.from(questionSetService.confirm(setId, principal.userId))
+
+    @Operation(
+        summary = "문제 세트 복제",
+        description = "DRAFT 사본을 만든다. 원본은 그대로 두고 사본을 고쳐 새 방에 재사용한다. 소유자만.",
+    )
+    @PostMapping("/{setId}/duplicate")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun duplicate(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable setId: Long,
+        @Valid @RequestBody(required = false) request: QuestionSetDuplicateRequest?,
+    ): QuestionSetSummaryResponse =
+        QuestionSetSummaryResponse.from(
+            questionSetService.duplicate(setId, principal.userId, request ?: QuestionSetDuplicateRequest()),
+        )
+
+    @Operation(
+        summary = "문제 세트 삭제",
+        description = "목록에서 감춘다. 지난 세션의 출제 근거라 실제로 지우지는 않는다. " +
+            "아직 안 끝난 방이 쓰고 있으면 409.",
+    )
+    @DeleteMapping("/{setId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun delete(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable setId: Long,
+    ) = questionSetService.delete(setId, principal.userId)
 
     @Operation(summary = "문항 추가", description = "직접 작성한 객관식·OX·서술형 문항을 세트 끝에 붙인다.")
     @PostMapping("/{setId}/questions")

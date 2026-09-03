@@ -55,17 +55,6 @@ class RoomIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `유료 방은 코인 기능 전까지 막는다`() {
-        mockMvc.perform(
-            post("/rooms").header("Authorization", "Bearer $hostToken")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"title":"유료 방","type":"PAID","fee":1000}"""),
-        )
-            .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.code").value("UNSUPPORTED_ROOM_TYPE"))
-    }
-
-    @Test
     fun `호스트가 아니면 방을 수정할 수 없다`() {
         val roomId = createdRoom().get("id").asLong()
 

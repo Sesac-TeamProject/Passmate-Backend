@@ -1,6 +1,8 @@
 package kr.passmate.coin.service
 
 import kr.passmate.coin.domain.CoinWallet
+import kr.passmate.coin.domain.PaymentMethod
+import kr.passmate.coin.dto.PaymentMethodResponse
 import kr.passmate.coin.repository.CoinWalletRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,4 +28,15 @@ class CoinWalletService(
     @Transactional(readOnly = true)
     fun getBalance(userId: Long): Int =
         coinWalletRepository.findByUserId(userId)?.balance ?: 0
+
+    /**
+     * 기본 결제 수단을 정한다 (FR-053). 지갑은 첫 로그인에 만들어지지만,
+     * 없더라도 여기서 만들어 준다 — 설정을 저장할 곳이 없어 실패하는 게 더 나쁘다.
+     */
+    @Transactional
+    fun changePaymentMethod(userId: Long, method: PaymentMethod): PaymentMethodResponse {
+        val wallet = createFor(userId)
+        wallet.changeDefaultPaymentMethod(method)
+        return PaymentMethodResponse(method)
+    }
 }
