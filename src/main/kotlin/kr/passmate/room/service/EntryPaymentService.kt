@@ -22,6 +22,12 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.random.Random
 
+/** 한 방에서 걷힌 참가비. 환급분은 이미 빠져 있다. */
+data class SettledEntryFees(
+    val gross: Int,
+    val payerCount: Int,
+)
+
 /**
  * 유료 방 참가비 (FR-050 · FR-051). **회원 전용** — 게스트는 컨트롤러에서 이미 걸린다.
  *
@@ -139,6 +145,16 @@ class EntryPaymentService(
     @Transactional(readOnly = true)
     fun activePaymentOf(roomId: Long, userId: Long): EntryPayment? =
         entryPaymentRepository.findByRoomIdAndUserIdAndStatus(roomId, userId, EntryPaymentStatus.PAID)
+
+    /**
+     * 이 방에서 **실제로 남은** 참가비 총액과 결제 인원. 호스트 수익 적립이 쓴다.
+     * 환급된 건은 빠진다 — 돌려준 돈까지 수익으로 잡으면 정산이 실제보다 커진다.
+     */
+    @Transactional(readOnly = true)
+    fun settledOf(roomId: Long): SettledEntryFees = SettledEntryFees(
+        gross = entryPaymentRepository.sumAmountByRoomIdAndStatus(roomId, EntryPaymentStatus.PAID),
+        payerCount = entryPaymentRepository.countByRoomIdAndStatus(roomId, EntryPaymentStatus.PAID),
+    )
 
     /** 참가비를 받는 방인지 확인하고 그 금액을 준다. */
     private fun verifyPaidRoom(room: Room): Int {
