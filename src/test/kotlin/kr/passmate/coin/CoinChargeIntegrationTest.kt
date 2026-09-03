@@ -87,7 +87,7 @@ class CoinChargeIntegrationTest : IntegrationTestSupport() {
         val raw = charge(10_000).andReturn().response.contentAsString
 
         assertThat(raw).doesNotContain("test-api-secret")
-        assertThat(raw).doesNotContain("test-webhook-secret")
+        assertThat(raw).doesNotContain("dGVzdC13ZWJob29rLXNlY3JldC1rZXk=")
     }
 
     @Test

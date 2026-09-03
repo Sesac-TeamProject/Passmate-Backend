@@ -29,6 +29,7 @@ passmate:
     store-id: store-test
     channel-key: channel-key-test
     api-secret: test-api-secret
-    webhook-secret: test-webhook-secret
+    # Standard Webhooks 규격: whsec_ 뒤가 base64 키다. 아무 문자열이나 넣으면 디코딩에서 막힌다
+    webhook-secret: whsec_dGVzdC13ZWJob29rLXNlY3JldC1rZXk=
   storage:
     bucket: passmate-test
