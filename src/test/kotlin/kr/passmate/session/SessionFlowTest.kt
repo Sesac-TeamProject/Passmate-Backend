@@ -30,6 +30,9 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 @AutoConfigureMockMvc
 @Transactional
@@ -372,6 +375,19 @@ class SessionFlowTest : IntegrationTestSupport() {
         mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $foreignGuest"))
             .andExpect(status().isForbidden)
             .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+    }
+
+    @Test
+    fun `문항 마감 시각은 UTC 기준으로 내려온다`() {
+        start()
+
+        val endsAt = snapshot(hostToken).andReturn().json()
+            .get("currentQuestion").get("endsAt").asText()
+            .let { LocalDateTime.parse(it) }
+
+        // 계약은 "오프셋 없는 UTC". JVM 기본 시간대(KST)로 발급되면 9시간 어긋난다 — 프론트 QA_BACKLOG B-1
+        val nowUtc = LocalDateTime.now(ZoneOffset.UTC)
+        assertThat(Duration.between(nowUtc, endsAt).abs()).isLessThan(Duration.ofMinutes(5))
     }
 
     // ---------- helpers ----------
