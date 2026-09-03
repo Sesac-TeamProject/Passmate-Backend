@@ -1,5 +1,6 @@
 package kr.passmate.common.config
 
+import kr.passmate.common.security.CorsProperties
 import kr.passmate.common.security.StompAuthChannelInterceptor
 import org.springframework.context.annotation.Configuration
 import org.springframework.messaging.simp.config.ChannelRegistration
@@ -23,11 +24,15 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 class WebSocketConfig(
     private val stompAuthChannelInterceptor: StompAuthChannelInterceptor,
+    private val corsProperties: CorsProperties,
 ) : WebSocketMessageBrokerConfigurer {
 
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
+        // 허용 출처는 REST CORS 와 같은 설정(WEB_BASE_URL 기반)을 쓴다 — 도메인을 코드에 박으면
+        // CORS 만 갱신되고 WS 는 옛 도메인에 묶이는 사고가 난다(실제로 있었다).
+        // Origin 헤더가 없는 요청(네이티브 앱)은 이 검사를 타지 않는다.
         registry.addEndpoint(ENDPOINT)
-            .setAllowedOriginPatterns("http://localhost:*", "https://*.passmate.app")
+            .setAllowedOriginPatterns(*corsProperties.originPatterns.toTypedArray())
         // SockJS 폴백은 두지 않는다. 웹·앱 모두 네이티브 WebSocket 을 쓰고,
         // 폴백을 켜면 경로(/ws/info, /ws/**/xhr_streaming)가 늘어 인가 검증 면이 넓어진다.
     }
