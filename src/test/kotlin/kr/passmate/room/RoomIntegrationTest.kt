@@ -237,6 +237,125 @@ class RoomIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.code").value("ROOM_NOT_JOINABLE"))
     }
 
+    // ---------- 방 상세 조회·수정 ----------
+
+    @Test
+    fun `방 상세를 조회하면 생성 시 값이 그대로 내려온다`() {
+        val room = createdRoom()
+        val roomId = room.get("id").asLong()
+
+        mockMvc.perform(get("/rooms/{id}", roomId).header("Authorization", "Bearer $otherToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(roomId))
+            .andExpect(jsonPath("$.title").value("CS 면접 대비"))
+            .andExpect(jsonPath("$.topic").value("CS 면접"))
+            .andExpect(jsonPath("$.pin").value(room.get("pin").asText()))
+            .andExpect(jsonPath("$.status").value("WAITING"))
+            .andExpect(jsonPath("$.type").value("FREE"))
+            .andExpect(jsonPath("$.participantCount").value(0))
+            .andExpect(jsonPath("$.screenLocked").value(false))
+    }
+
+    @Test
+    fun `방 상세 조회는 인증이 필요하고 없는 방이면 404 다`() {
+        val roomId = createdRoom().get("id").asLong()
+
+        mockMvc.perform(get("/rooms/{id}", roomId))
+            .andExpect(status().isUnauthorized)
+
+        mockMvc.perform(get("/rooms/{id}", 999_999L).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"))
+    }
+
+    @Test
+    fun `호스트는 대기 중인 방을 수정할 수 있고 PUT 은 전체 교체다`() {
+        val roomId = createdRoom().get("id").asLong()
+
+        // topic 을 본문에서 빼면 null 로 교체된다 — PUT 전체 교체 의미
+        mockMvc.perform(
+            put("/rooms/{id}", roomId).header("Authorization", "Bearer $hostToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"title":"고친 제목","description":"설명 추가","maxParticipants":50,"isPublic":true}"""),
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.title").value("고친 제목"))
+            .andExpect(jsonPath("$.description").value("설명 추가"))
+            .andExpect(jsonPath("$.maxParticipants").value(50))
+            .andExpect(jsonPath("$.topic").doesNotExist())
+
+        mockMvc.perform(get("/rooms/{id}", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.title").value("고친 제목"))
+
+        // isPublic=true 로 바뀐 것은 공개 목록 노출로 확인한다
+        val publicIds = mockMvc.perform(get("/rooms/public"))
+            .andExpect(status().isOk)
+            .andReturn().json()
+            .get("content").map { it.get("id").asLong() }
+        assertThat(publicIds).contains(roomId)
+    }
+
+    @Test
+    fun `대기 중이 아닌 방은 수정할 수 없다`() {
+        val roomId = createdRoom().get("id").asLong()
+        mockMvc.perform(post("/rooms/{id}/close", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isOk)
+
+        mockMvc.perform(
+            put("/rooms/{id}", roomId).header("Authorization", "Bearer $hostToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"title":"뒤늦은 수정"}"""),
+        )
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("CONFLICT"))
+    }
+
+    @Test
+    fun `방 수정 요청에 제목이 비어 있으면 400 이다`() {
+        val roomId = createdRoom().get("id").asLong()
+
+        mockMvc.perform(
+            put("/rooms/{id}", roomId).header("Authorization", "Bearer $hostToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"title":""}"""),
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+    }
+
+    // ---------- 퇴장·닉네임 확인 엣지 ----------
+
+    @Test
+    fun `입장하지 않은 회원의 퇴장 요청은 404 다`() {
+        val roomId = createdRoom().get("id").asLong()
+
+        mockMvc.perform(delete("/rooms/{id}/participants/me", roomId).header("Authorization", "Bearer $otherToken"))
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.code").value("PARTICIPANT_NOT_FOUND"))
+    }
+
+    @Test
+    fun `이미 나간 게스트가 다시 퇴장하면 409 다`() {
+        val roomId = createdRoom().get("id").asLong()
+        val guestToken = joinAsGuest(roomId, "게스트1").andReturn().json()
+            .get("accessToken").asText()
+
+        mockMvc.perform(delete("/rooms/{id}/participants/me", roomId).header("Authorization", "Bearer $guestToken"))
+            .andExpect(status().isNoContent)
+
+        mockMvc.perform(delete("/rooms/{id}/participants/me", roomId).header("Authorization", "Bearer $guestToken"))
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("CONFLICT"))
+    }
+
+    @Test
+    fun `없는 방의 닉네임 중복 확인은 404 다`() {
+        mockMvc.perform(get("/rooms/{id}/participants/nickname-check", 999_999L).param("nickname", "아무개"))
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"))
+    }
+
     // ---------- helpers ----------
 
     private fun tokenFor(key: String): String {
