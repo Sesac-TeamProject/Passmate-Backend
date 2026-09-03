@@ -1,7 +1,9 @@
 package kr.passmate.room.service
 
+import kr.passmate.common.config.PolicyProperties
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
+import kr.passmate.hostlevel.service.HostGradeQueryService
 import kr.passmate.room.domain.Room
 import kr.passmate.room.domain.RoomStatus
 import kr.passmate.room.domain.RoomType
@@ -15,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional
 class RoomService(
     private val roomRepository: RoomRepository,
     private val pinService: PinService,
+    private val hostGradeQueryService: HostGradeQueryService,
+    private val policyProperties: PolicyProperties,
 ) {
 
     /**
@@ -24,6 +28,8 @@ class RoomService(
     @Transactional
     fun create(hostUserId: Long, request: RoomCreateRequest): Room {
         verifySupportedType(request.type)
+        verifyFee(request.type, request.fee)
+        verifyHostLevel(request.type, hostUserId)
         return roomRepository.save(
             Room(
                 hostUserId = hostUserId,
@@ -76,19 +82,58 @@ class RoomService(
     }
 
     /**
-     * 유료·브랜디드 방은 코인 차감과 호스트 등급 판정이 필요한데 그 기능이 아직 없다.
-     * 지금 열어두면 참가비를 받지 않고 입장시키게 되므로 명시적으로 막는다.
+     * 브랜디드 방은 기업 위탁 계약·정산이 따로 붙는데 그 기능이 아직 없다.
+     * 지금 열어두면 계약 없이 브랜디드로 표시되는 방이 생기므로 명시적으로 막는다.
      */
     private fun verifySupportedType(type: RoomType) {
-        if (type != RoomType.FREE) {
+        if (type == RoomType.BRANDED) {
             throw BusinessException(
                 ErrorCode.UNSUPPORTED_ROOM_TYPE,
-                "유료·브랜디드 방은 코인 결제 기능 구현 후 열립니다. 지금은 무료 방만 만들 수 있습니다.",
+                "브랜디드 방은 기업 위탁 기능 구현 후 열립니다.",
             )
+        }
+    }
+
+    /**
+     * 참가비는 유료 방에만, 그리고 정책 범위 안에서만 붙는다.
+     *
+     * 무료 방에 참가비가 붙는 것도 막는다 — 화면은 무료라고 알리는데 값이 남아 있으면
+     * 나중에 유형만 바꿔도 조용히 돈을 걷게 된다.
+     */
+    private fun verifyFee(type: RoomType, fee: Int?) {
+        if (type == RoomType.FREE) {
+            if (fee != null) {
+                throw BusinessException(ErrorCode.INVALID_INPUT, "무료 방에는 참가비를 붙일 수 없습니다.")
+            }
+            return
+        }
+        if (fee == null) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "유료 방은 참가비가 필요합니다.")
+        }
+        val min = policyProperties.entryFeeMin
+        val max = policyProperties.entryFeeMax
+        if (fee !in min..max) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "참가비는 $min~$max 코인 사이여야 합니다.")
+        }
+    }
+
+    /**
+     * 참가비를 받으려면 Lv.3 이상이어야 한다(FR-046).
+     * 등급 이력이 없는 호스트는 Lv.1 로 본다 — 없다고 통과시키면 게이트가 없는 것과 같다.
+     */
+    private fun verifyHostLevel(type: RoomType, hostUserId: Long) {
+        if (type == RoomType.FREE) return
+        val level = hostGradeQueryService.levelsOrDefault(listOf(hostUserId))[hostUserId] ?: LOWEST_LEVEL
+        if (level < PAID_ROOM_MIN_LEVEL) {
+            throw BusinessException(ErrorCode.HOST_LEVEL_REQUIRED)
         }
     }
 
     companion object {
         val ACTIVE_STATUSES = listOf(RoomStatus.WAITING, RoomStatus.RUNNING)
+
+        /** 유료 방 개설에 필요한 최소 등급 (FR-046) */
+        private const val PAID_ROOM_MIN_LEVEL = 3
+        private const val LOWEST_LEVEL = 1
     }
 }
