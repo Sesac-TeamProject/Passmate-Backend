@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.media.Schema
 import kr.passmate.coin.domain.CoinRefType
 import kr.passmate.coin.domain.CoinTransaction
 import kr.passmate.coin.domain.CoinTransactionType
+import kr.passmate.coin.domain.PaymentMethod
+import jakarta.validation.constraints.NotNull
 import java.time.LocalDateTime
 
 /**
@@ -50,7 +52,25 @@ data class CoinBalanceResponse(
     @field:Schema(description = "보유 코인. 1 C = ₩1")
     val balance: Int,
     @field:Schema(description = "기본 결제 수단. 설정한 적 없으면 빠진다")
-    val defaultPaymentMethod: String?,
+    val defaultPaymentMethod: PaymentMethod?,
     @field:Schema(description = "가장 최근 내역 한 건. 없으면 빠진다")
     val lastTransaction: CoinTransactionRow?,
+)
+
+/**
+ * 기본 결제 수단 설정 (FR-053).
+ *
+ * 값이 빠지면 Jackson 이 채워 넣지 않도록 nullable + @NotNull 로 받는다 —
+ * non-null 로 두면 누락과 "정하지 않음"을 구별할 수 없다.
+ */
+@Schema(description = "기본 결제 수단 설정")
+data class PaymentMethodRequest(
+    @field:NotNull(message = "결제 수단은 필수입니다.")
+    @field:Schema(description = "KAKAOPAY · NAVERPAY · TOSSPAY · CARD · BANK_TRANSFER")
+    val method: PaymentMethod?,
+)
+
+@Schema(description = "기본 결제 수단")
+data class PaymentMethodResponse(
+    val defaultPaymentMethod: PaymentMethod,
 )

@@ -12,6 +12,10 @@ data class PolicyProperties(
     val entryFeeMin: Int,
     /** 참가비 상한 */
     val entryFeeMax: Int,
+    /** 코인 충전 1회 하한 (코인, 1 C = 1원) */
+    val chargeAmountMin: Int,
+    /** 코인 충전 1회 상한. 오입력·악용으로 한 번에 큰 금액이 결제되는 것을 막는다 */
+    val chargeAmountMax: Int,
     /** 최소 정산 신청 금액 (원) */
     val settlementMinAmount: Int,
     /**

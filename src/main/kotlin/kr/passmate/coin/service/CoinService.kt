@@ -76,6 +76,26 @@ class CoinService(
         return record(userId, CoinTransactionType.REFUND, amount, wallet.balance, refType, refId, memo)
     }
 
+    /**
+     * 충전 적립. **결제가 확정된 뒤에만** 부른다(CoinCharge.markPaid 가 true 를 준 경우).
+     * 지갑이 없으면 만들어 준다 — 충전할 곳이 없어 실패하면 돈만 빠져나간 상태가 된다.
+     */
+    @Transactional
+    fun charge(
+        userId: Long,
+        amount: Int,
+        refType: CoinRefType,
+        refId: Long,
+        memo: String? = null,
+    ): CoinTransaction {
+        require(amount > 0) { "충전 금액은 0보다 커야 합니다." }
+        val wallet = coinWalletRepository.findByUserIdForUpdate(userId)
+            ?: coinWalletRepository.save(CoinWallet(userId = userId))
+
+        wallet.charge(amount)
+        return record(userId, CoinTransactionType.CHARGE, amount, wallet.balance, refType, refId, memo)
+    }
+
     /** 지금 잔액. 지갑이 없으면 0. 환급이 멱등으로 건너뛴 뒤 응답을 채울 때 쓴다. */
     @Transactional(readOnly = true)
     fun balanceOf(userId: Long): Int = coinWalletRepository.findByUserId(userId)?.balance ?: 0

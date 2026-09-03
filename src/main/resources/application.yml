@@ -59,6 +59,8 @@ passmate:
   policy:
     entry-fee-min: 100                 # 참가비 하한 (코인, 1 C = 1원)
     entry-fee-max: 10000               # 참가비 상한
+    charge-amount-min: 1000            # 코인 충전 1회 하한
+    charge-amount-max: 1000000         # 코인 충전 1회 상한 (오입력·악용 방지)
     settlement-min-amount: 10000       # 최소 정산액 (원)
     ai-free-limit: 5                   # AI 문항 생성 무료 횟수 (호스트, 누적 — 명세 "최초 5회 무료")
     essay-analysis-free-limit: 5       # 월 서술형 AI 분석 무료 횟수 (학생, FR-075)
@@ -130,10 +132,17 @@ passmate:
     reasoning-effort: ${LLM_REASONING_EFFORT:}   # 추론 모델(gpt-5 계열)에서만 유효 — 비우면 파라미터를 보내지 않는다
     timeout-seconds: 30
     max-concurrent-analysis: 4
+  # 포트원 V2. 테스트 채널과 실연동 채널은 값만 다르고 코드는 같다
+  # (2026-09-03 결정: 운영도 테스트 채널을 쓴다 — 실결제가 없어 PG 실계약이 필요 없다)
   portone:
-    api-secret: ${PORTONE_API_SECRET:}
+    base-url: ${PORTONE_BASE_URL:https://api.portone.io}
+    # 결제창을 띄우는 값 — 클라이언트에 내려보내도 된다
     store-id: ${PORTONE_STORE_ID:}
+    channel-key: ${PORTONE_CHANNEL_KEY:}
+    # 서버 전용 — 결제 조회·취소까지 되는 열쇠라 응답에 절대 싣지 않는다
+    api-secret: ${PORTONE_API_SECRET:}
     webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
+    timeout-seconds: ${PORTONE_TIMEOUT_SECONDS:10}
   client:
     base-url: ${WEB_BASE_URL:http://localhost:5173}
   cors:

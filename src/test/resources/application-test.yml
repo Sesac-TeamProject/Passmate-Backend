@@ -24,5 +24,12 @@ passmate:
     key: test-encryption-key-for-integration-tests-32bytes
   jwt:
     secret: test-secret-key-for-integration-tests-at-least-32-bytes
+  # 값이 있어야 결제 경로가 열린다. 실제 포트원 호출은 FakePortOneClient 가 대신한다
+  portone:
+    store-id: store-test
+    channel-key: channel-key-test
+    api-secret: test-api-secret
+    # Standard Webhooks 규격: whsec_ 뒤가 base64 키다. 아무 문자열이나 넣으면 디코딩에서 막힌다
+    webhook-secret: whsec_dGVzdC13ZWJob29rLXNlY3JldC1rZXk=
   storage:
     bucket: passmate-test

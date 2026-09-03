@@ -26,15 +26,15 @@ Spring Boot 3.5 · Kotlin 2.2 · JVM 17 · MySQL 8.0 · S3 · 포트원(PortOne)
 
 | 기능 | 사용자가 할 일 | 받는 값 → 넣을 곳 | 상태 |
 |---|---|---|---|
-| Google 로그인 | Google Cloud → OAuth 동의 화면 + 클라이언트 ID(웹·Android·iOS) | 웹 클라이언트 ID → `GOOGLE_CLIENT_ID` | 🟨 웹 클라이언트 ID 설정 완료 · **실제 로그인 확인은 연동 시점**(그때까지 `dev-login` 유지) |
+| Google 로그인 | Google Cloud → OAuth 동의 화면 + 클라이언트 ID(웹·Android·iOS) | 웹 클라이언트 ID → `GOOGLE_CLIENT_ID` | 🟨 웹 클라이언트 ID 설정 완료 · 도메인이 생겨 **운영 리디렉션 URI 등록이 가능해짐**(2026-09-03) · 실제 로그인 확인은 연동 시점(그때까지 `dev-login` 유지) |
 | AI 문제 생성 | OpenAI 콘솔에서 API 키 발급 (2026-08-31 OpenAI 로 결정) | `OPENAI_API_KEY` | ✅ 설정 완료 — **호출은 허가 후에만** |
-| 코인 충전·결제 | 포트원 가입 → 테스트 채널 · 웹훅 등록 | `PORTONE_STORE_ID` · `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` | ⬜ 대기 |
+| 코인 충전·결제 | 🚨 **포트원 V2 API Secret 재발급** (결제 연동 → 연동 관리 → 식별코드·API Keys → `V2 API` 탭) | `PORTONE_API_SECRET` 교체 | 🟥 **막힘** (2026-09-03 실호출 확인) — 현재 값은 토스페이먼츠 시크릿 키(`test_sk_…`)라 포트원이 401 `Invalid API secret` 응답. storeId·channelKey·webhookSecret 은 정상. **운영도 테스트 채널로 간다**(실결제 없음, PG 실계약 불필요) |
 | 파일 업로드 | 없음 — 배포 인프라 작업으로 해결됨(2026-09-03 확인) | 버킷 `passmate-prod-storage` · SSM `S3_BUCKET` 설정됨 · 자격증명은 EC2 인스턴스 역할(키 발급 없음, IMDS hop 2 로 컨테이너 접근 가능) | ✅ 준비 완료 — 실업로드 왕복 검증만 남음(S3 호출은 허가 후) |
 | 푸시 알림 | Firebase 프로젝트 + 서비스 계정 키 | FCM 자격증명 | ⬜ 대기 |
-| 배포 | AWS 계정 · 도메인 구입 · 인증서(certbot) | EC2 · RDS · SSM 파라미터 | ⬜ 대기 |
+| 배포 | 없음 — 완료(2026-09-03 확인) | `passmate.kr` · `api.passmate.kr` · Let's Encrypt(자동 갱신) · EC2 + SSM | ✅ 운영 가동 중 — `https://api.passmate.kr/actuator/health` 200 |
 
 > 앱(Android·iOS)은 자기 클라이언트 ID가 아니라 **웹 클라이언트 ID를 `serverClientId`로** 지정해 ID 토큰을 받아야 `aud` 검증을 통과한다.
-> 운영 리디렉션 URI 등록에는 **https 도메인**이 필요하므로 도메인·인증서가 Google 설정의 선행 조건이다.
+> 운영 도메인·인증서는 확보됐다(`passmate.kr` · `api.passmate.kr`) — https 를 선행 조건으로 삼던 항목들은 더 이상 막혀 있지 않다.
 
 ## 문서 (진실의 원천)
 
