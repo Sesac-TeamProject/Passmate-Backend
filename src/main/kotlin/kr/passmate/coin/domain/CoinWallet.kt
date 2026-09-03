@@ -2,6 +2,8 @@ package kr.passmate.coin.domain
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
@@ -35,8 +37,9 @@ class CoinWallet(
     var balance: Int = 0
         protected set
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "default_payment_method", length = 30)
-    var defaultPaymentMethod: String? = null
+    var defaultPaymentMethod: PaymentMethod? = null
         protected set
 
     @Column(name = "last_transaction_at")
@@ -65,7 +68,8 @@ class CoinWallet(
         lastTransactionAt = at
     }
 
-    fun changeDefaultPaymentMethod(method: String?) {
+    /** 기본 결제 수단을 정한다. 충전 화면이 미리 골라 둘 값일 뿐 결제 정보는 담지 않는다. */
+    fun changeDefaultPaymentMethod(method: PaymentMethod) {
         defaultPaymentMethod = method
     }
 
