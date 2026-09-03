@@ -20,6 +20,8 @@ passmate:
   # 테스트에서 실제 OpenAI 를 부르는 일이 없도록 키를 비워 둔다. Client 는 Fake 로 대체한다
   ai:
     api-key: ""
+  encryption:
+    key: test-encryption-key-for-integration-tests-32bytes
   jwt:
     secret: test-secret-key-for-integration-tests-at-least-32-bytes
   storage:
