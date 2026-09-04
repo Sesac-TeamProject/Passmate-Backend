@@ -48,7 +48,12 @@ class RoomQueryService(
 
     fun getActiveRoomByPin(pin: String): Room =
         roomRepository.findByPinAndStatusIn(pin, PinService.ACTIVE_STATUSES)
-            ?: throw BusinessException(ErrorCode.ROOM_NOT_FOUND, "해당 PIN 의 방이 없습니다.")
+            // 활성 방이 없을 때: 쓰였던 PIN 이면 "이미 끝난 방"(410), 아니면 "없는 PIN"(404).
+            // 화면이 안내 문구를 가르는 근거(웹 QA_BACKLOG B-4). PIN 재사용 시엔 위 활성 조회가 우선한다
+            ?: throw when {
+                roomRepository.existsByPin(pin) -> BusinessException(ErrorCode.ROOM_ENDED)
+                else -> BusinessException(ErrorCode.ROOM_NOT_FOUND, "해당 PIN 의 방이 없습니다.")
+            }
 
     /** 입장 링크를 담은 QR PNG. 호스트만 받을 수 있다. */
     fun getQrPng(roomId: Long, hostUserId: Long): ByteArray {

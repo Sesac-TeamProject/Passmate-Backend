@@ -6,8 +6,11 @@ import kr.passmate.question.dto.QuestionRequest
 import kr.passmate.question.dto.QuestionSetCreateRequest
 import kr.passmate.question.service.QuestionSetService
 import kr.passmate.room.domain.RoomType
+import kr.passmate.common.security.GuestPrincipal
+import kr.passmate.room.dto.JoinRoomRequest
 import kr.passmate.room.dto.RoomCreateRequest
 import kr.passmate.room.dto.RoomUpdateRequest
+import kr.passmate.room.service.ParticipantService
 import kr.passmate.room.service.RoomService
 import kr.passmate.session.service.SessionService
 import kr.passmate.voicehint.service.VoiceHintService
@@ -46,6 +49,7 @@ class SessionBroadcastTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var userService: UserService
     @Autowired private lateinit var roomService: RoomService
+    @Autowired private lateinit var participantService: ParticipantService
     @Autowired private lateinit var questionSetService: QuestionSetService
     @Autowired private lateinit var sessionService: SessionService
     @Autowired private lateinit var voiceHintService: VoiceHintService
@@ -184,6 +188,56 @@ class SessionBroadcastTest : IntegrationTestSupport() {
         assertThat(payload["audioUrl"].toString()).startsWith("https://fake-storage.test/rooms/${room.id}/hints/")
         assertThat(payload["durationMs"]).isEqualTo(1800)
         assertThat(payload).containsKeys("hintId", "sessionQuestionId", "questionId", "publishedAt")
+
+        session.disconnect()
+    }
+
+    @Test
+    fun `입장하면 PARTICIPANT_JOINED 가, 나가면 PARTICIPANT_LEFT 가 방 전체에 나간다`() {
+        val hostId = userService.loginOrRegister(
+            AuthProvider.GOOGLE, "bc-join-${System.nanoTime()}", null, "호스트", null,
+        ).user.id
+        val room = roomService.create(hostId, RoomCreateRequest(title = "입퇴장 방송", type = RoomType.FREE))
+
+        val received = LinkedBlockingQueue<Map<String, Any?>>()
+        val session = subscribeRoom(room.id, hostId, received)
+
+        val joined = participantService.join(room.id, null, JoinRoomRequest(nickname = "게스트", avatarId = "cat"))
+
+        @Suppress("UNCHECKED_CAST")
+        val joinedPayload = drainUntil(received, "PARTICIPANT_JOINED")["payload"] as Map<String, Any?>
+        assertThat((joinedPayload["id"] as Number).toLong()).isEqualTo(joined.participant.id)
+        assertThat(joinedPayload["nickname"]).isEqualTo("게스트")
+        assertThat(joinedPayload["avatarId"]).isEqualTo("cat")
+        assertThat(joinedPayload["isGuest"]).isEqualTo(true)
+        assertThat(joinedPayload).containsKey("joinedAt")
+
+        participantService.leave(room.id, GuestPrincipal(joined.participant.id, room.id))
+
+        @Suppress("UNCHECKED_CAST")
+        val leftPayload = drainUntil(received, "PARTICIPANT_LEFT")["payload"] as Map<String, Any?>
+        assertThat((leftPayload["id"] as Number).toLong()).isEqualTo(joined.participant.id)
+        assertThat(leftPayload["nickname"]).isEqualTo("게스트")
+
+        session.disconnect()
+    }
+
+    @Test
+    fun `호스트가 내보내도 PARTICIPANT_LEFT 가 나간다`() {
+        val hostId = userService.loginOrRegister(
+            AuthProvider.GOOGLE, "bc-kick-${System.nanoTime()}", null, "호스트", null,
+        ).user.id
+        val room = roomService.create(hostId, RoomCreateRequest(title = "강퇴 방송", type = RoomType.FREE))
+        val target = participantService.join(room.id, null, JoinRoomRequest(nickname = "내보낼사람")).participant.id
+
+        val received = LinkedBlockingQueue<Map<String, Any?>>()
+        val session = subscribeRoom(room.id, hostId, received)
+
+        participantService.kick(room.id, target, hostId)
+
+        @Suppress("UNCHECKED_CAST")
+        val payload = drainUntil(received, "PARTICIPANT_LEFT")["payload"] as Map<String, Any?>
+        assertThat((payload["id"] as Number).toLong()).isEqualTo(target)
 
         session.disconnect()
     }
