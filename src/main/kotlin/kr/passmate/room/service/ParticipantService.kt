@@ -1,5 +1,7 @@
 package kr.passmate.room.service
 
+import kr.passmate.common.event.ParticipantJoinedEvent
+import kr.passmate.common.event.ParticipantLeftEvent
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.common.security.AuthPrincipal
@@ -14,6 +16,7 @@ import kr.passmate.room.dto.JoinRoomRequest
 import kr.passmate.room.repository.ParticipantRepository
 import kr.passmate.room.repository.RoomRepository
 import kr.passmate.user.service.UserService
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -36,6 +39,7 @@ class ParticipantService(
     private val userService: UserService,
     private val jwtTokenProvider: JwtTokenProvider,
     private val entryPaymentService: EntryPaymentService,
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
 
     /**
@@ -75,6 +79,9 @@ class ParticipantService(
         // 게이트는 서버에만 있다 — 결제 화면을 건너뛰고 이 API 를 바로 불러도 막힌다
         entryPaymentService.consumeForJoin(room, userId, participant.id)
 
+        // 결제 게이트까지 통과한 뒤에만 알린다 — 입장이 무산된 사람이 명단에 떠서는 안 된다
+        applicationEventPublisher.publishEvent(participant.toJoinedEvent())
+
         return JoinResult(
             participant = participant,
             // 회원은 이미 자기 액세스 토큰이 있으므로 새로 주지 않는다
@@ -97,6 +104,7 @@ class ParticipantService(
         verifyBelongsTo(roomId, participant)
         participant.leave()
         decreaseCount(roomId)
+        applicationEventPublisher.publishEvent(participant.toLeftEvent())
     }
 
     /**
@@ -114,6 +122,7 @@ class ParticipantService(
         verifyBelongsTo(roomId, participant)
         participant.kick()
         decreaseCount(roomId)
+        applicationEventPublisher.publishEvent(participant.toLeftEvent())
     }
 
     @Transactional(readOnly = true)
@@ -129,6 +138,12 @@ class ParticipantService(
     private fun decreaseCount(roomId: Long) {
         roomRepository.findByIdForUpdate(roomId)?.decreaseParticipantCount()
     }
+
+    private fun Participant.toJoinedEvent() =
+        ParticipantJoinedEvent(roomId, id, nickname, avatarId, isGuest, joinedAt)
+
+    private fun Participant.toLeftEvent() =
+        ParticipantLeftEvent(roomId, id, nickname, avatarId, isGuest, joinedAt)
 
     private fun verifyBelongsTo(roomId: Long, participant: Participant) {
         if (participant.roomId != roomId) {
