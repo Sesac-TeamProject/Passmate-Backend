@@ -164,6 +164,56 @@ class AuthIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isNoContent)
     }
 
+    @Test
+    fun `만료된 리프레시 토큰으로는 재발급받을 수 없다`() {
+        // 리프레시 유효기간(14일)보다 더 과거에 발급된 것으로 만든다
+        val expired = jwtTokenProvider.issue(1L, false, Instant.now().minusSeconds(15 * 24 * 3600L)).refreshToken
+
+        mockMvc.perform(
+            post("/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"refreshToken":"$expired"}"""),
+        )
+            .andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.code").value("TOKEN_EXPIRED"))
+    }
+
+    @Test
+    fun `서명이 깨진 리프레시 토큰은 401 TOKEN_INVALID 다`() {
+        mockMvc.perform(
+            post("/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"refreshToken":"not-a-jwt"}"""),
+        )
+            .andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.code").value("TOKEN_INVALID"))
+    }
+
+    @Test
+    fun `게스트 토큰으로는 재발급받을 수 없다`() {
+        val guestToken = jwtTokenProvider.issueGuestToken(participantId = 1L, roomId = 1L)
+
+        mockMvc.perform(
+            post("/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"refreshToken":"$guestToken"}"""),
+        )
+            .andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.code").value("TOKEN_INVALID"))
+    }
+
+    @Test
+    fun `dev-login 은 운영·테스트 프로파일에 존재하지 않는다`() {
+        // @Profile("local","dev") 한정 — 다른 프로파일에 이 경로가 열려 있으면 인증 우회가 된다
+        mockMvc.perform(
+            post("/auth/dev-login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"key":"attacker"}"""),
+        )
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.accessToken").doesNotExist())
+    }
+
     private fun login(idToken: String) = mockMvc.perform(
         post("/auth/login/{provider}", "google")
             .contentType(MediaType.APPLICATION_JSON)

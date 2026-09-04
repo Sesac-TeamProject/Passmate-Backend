@@ -19,6 +19,9 @@ interface RoomRepository : JpaRepository<Room, Long> {
 
     fun findByPinAndStatusIn(pin: String, statuses: Collection<RoomStatus>): Room?
 
+    /** 활성 조회가 빗나갔을 때 '끝난 방'인지 '없는 PIN'인지 가른다(410 vs 404). */
+    fun existsByPin(pin: String): Boolean
+
     /**
      * 입장 처리용 비관적 락. 정원 확인과 participant_count 증가 사이에
      * 다른 입장이 끼어들어 정원을 넘기는 것을 막는다.

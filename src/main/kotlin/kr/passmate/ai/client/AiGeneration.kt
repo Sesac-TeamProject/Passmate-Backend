@@ -46,8 +46,10 @@ data class GeneratedQuestion(
         when (type) {
             QuestionType.MCQ -> {
                 val options = choices.orEmpty()
-                if (options.size < MIN_CHOICES) {
-                    throw AiCallException("객관식 보기가 ${MIN_CHOICES}개 미만입니다.", retryable = true)
+                // 프론트가 보기 키를 A·B·C·D 로 고정해 4개가 아니면 화면이 깨진다(웹 버그 리포트 #3).
+                // 프롬프트도 "보기 4개"를 요구하므로 검증도 정확히 4개로 맞춘다 — 어긋나면 재시도
+                if (options.size != REQUIRED_CHOICES) {
+                    throw AiCallException("객관식 보기는 정확히 ${REQUIRED_CHOICES}개여야 합니다.", retryable = true)
                 }
                 if (answer !in options) {
                     throw AiCallException("객관식 정답이 보기 안에 없습니다.", retryable = true)
@@ -67,7 +69,7 @@ data class GeneratedQuestion(
     }
 
     private companion object {
-        const val MIN_CHOICES = 2
+        const val REQUIRED_CHOICES = 4
         val OX_ANSWERS = setOf("O", "X")
     }
 }

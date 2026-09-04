@@ -30,6 +30,9 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 @AutoConfigureMockMvc
 @Transactional
@@ -286,6 +289,105 @@ class SessionFlowTest : IntegrationTestSupport() {
             .andExpect(status().isNoContent)
 
         snapshot(hostToken).andExpect(jsonPath("$.status").value("ENDED"))
+    }
+
+    @Test
+    fun `현재 문항 마감은 호스트만 할 수 있다`() {
+        val other = jwtTokenProvider.issue(member("sess-other2"), false).accessToken
+        start()
+
+        mockMvc.perform(post("/rooms/{id}/session/current/end", roomId).header("Authorization", "Bearer $other"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("NOT_ROOM_HOST"))
+    }
+
+    @Test
+    fun `시작 전의 방은 문항을 마감할 수 없다`() {
+        mockMvc.perform(post("/rooms/{id}/session/current/end", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("SESSION_NOT_RUNNING"))
+    }
+
+    @Test
+    fun `열려 있는 문항이 없으면 마감은 409 다`() {
+        start()
+        endCurrent()
+
+        mockMvc.perform(post("/rooms/{id}/session/current/end", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("QUESTION_NOT_RUNNING"))
+    }
+
+    @Test
+    fun `참가자도 랭킹을 볼 수 있고 제출 전에는 비어 있다`() {
+        start()
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $guestToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.length()").value(0))
+
+        submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $guestToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].rank").value(1))
+            .andExpect(jsonPath("$[0].nickname").value("게스트"))
+    }
+
+    @Test
+    fun `랭킹 조회는 인증이 필요하다`() {
+        start()
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `참가하지 않은 회원은 세션 조회 API 를 볼 수 없다`() {
+        val outsider = jwtTokenProvider.issue(member("sess-outsider"), false).accessToken
+        start()
+
+        snapshot(outsider)
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $outsider"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        endCurrent()
+        mockMvc.perform(get("/rooms/{id}/session/questions/{q}/result", roomId, mcqId).header("Authorization", "Bearer $outsider"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+    }
+
+    @Test
+    fun `다른 방 게스트 토큰으로는 세션을 볼 수 없다`() {
+        val otherRoom = roomService.create(hostId, RoomCreateRequest(title = "다른 방", type = RoomType.FREE))
+        val foreignGuest = participantService.join(otherRoom.id, null, JoinRoomRequest(nickname = "남의방게스트")).accessToken!!
+        start()
+
+        snapshot(foreignGuest)
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $foreignGuest"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+    }
+
+    @Test
+    fun `문항 마감 시각은 UTC 기준으로 내려온다`() {
+        start()
+
+        val endsAt = snapshot(hostToken).andReturn().json()
+            .get("currentQuestion").get("endsAt").asText()
+            .let { LocalDateTime.parse(it) }
+
+        // 계약은 "오프셋 없는 UTC". JVM 기본 시간대(KST)로 발급되면 9시간 어긋난다 — 프론트 QA_BACKLOG B-1
+        val nowUtc = LocalDateTime.now(ZoneOffset.UTC)
+        assertThat(Duration.between(nowUtc, endsAt).abs()).isLessThan(Duration.ofMinutes(5))
     }
 
     // ---------- helpers ----------

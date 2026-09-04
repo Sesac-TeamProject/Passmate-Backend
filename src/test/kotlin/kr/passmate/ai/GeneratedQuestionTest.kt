@@ -25,9 +25,19 @@ class GeneratedQuestionTest {
     }
 
     @Test
-    fun `객관식 보기가 하나뿐이면 거부한다`() {
-        assertThatThrownBy { mcq(choices = listOf("가"), answer = "가").verifyConsistent() }
-            .isInstanceOf(AiCallException::class.java)
+    fun `객관식 보기가 정확히 4개가 아니면 재시도 대상이다`() {
+        // 프론트가 보기 키를 A·B·C·D 로 고정해 4개가 아니면 화면이 깨진다(웹 버그 리포트 #3) —
+        // 프롬프트도 "보기 4개"를 요구하므로 검증도 정확히 4개로 못박는다
+        listOf(
+            listOf("가"),
+            listOf("가", "나"),
+            listOf("가", "나", "다"),
+            listOf("가", "나", "다", "라", "마"),
+        ).forEach { choices ->
+            assertThatThrownBy { mcq(choices = choices, answer = "가").verifyConsistent() }
+                .isInstanceOf(AiCallException::class.java)
+                .satisfies({ assertThat((it as AiCallException).retryable).isTrue() })
+        }
     }
 
     @Test

@@ -114,12 +114,12 @@ class SessionController(
         @CurrentUser principal: AuthPrincipal,
         @PathVariable roomId: Long,
         @PathVariable questionId: Long,
-    ): QuestionResultResponse = sessionQueryService.questionResult(roomId, questionId)
+    ): QuestionResultResponse = sessionQueryService.questionResult(roomId, questionId, principal)
 
     @Operation(summary = "랭킹 조회", description = "누적 점수 기준. 동점은 같은 등수로 묶는다.")
     @GetMapping("/ranking")
     fun ranking(
         @CurrentUser principal: AuthPrincipal,
         @PathVariable roomId: Long,
-    ): List<RankingEntry> = sessionQueryService.ranking(roomId)
+    ): List<RankingEntry> = sessionQueryService.ranking(roomId, principal)
 }

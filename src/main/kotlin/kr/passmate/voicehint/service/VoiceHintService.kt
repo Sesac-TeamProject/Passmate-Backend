@@ -87,7 +87,7 @@ class VoiceHintService(
     @Transactional(readOnly = true)
     fun list(roomId: Long, principal: AuthPrincipal, questionId: Long?): VoiceHintListResponse {
         val room = roomQueryService.getRoom(roomId)
-        verifyBelongsToRoom(roomId, room.hostUserId, principal)
+        participantQueryService.verifyBelongsToRoom(room, principal)
 
         val sessionQuestions = sessionQueryService.sessionQuestions(roomId).associateBy { it.id }
         val hints = questionId
@@ -128,17 +128,6 @@ class VoiceHintService(
             throw BusinessException(ErrorCode.INVALID_INPUT, "오디오 파일만 올릴 수 있습니다.")
         }
         return file.bytes
-    }
-
-    private fun verifyBelongsToRoom(roomId: Long, hostUserId: Long, principal: AuthPrincipal) {
-        when (principal) {
-            is UserPrincipal -> {
-                val allowed = principal.userId == hostUserId || participantQueryService.isJoined(roomId, principal.userId)
-                if (!allowed) throw BusinessException(ErrorCode.ACCESS_DENIED)
-            }
-            // 게스트 토큰은 자기가 입장한 방 하나에만 쓸 수 있다
-            is GuestPrincipal -> if (principal.roomId != roomId) throw BusinessException(ErrorCode.ACCESS_DENIED)
-        }
     }
 
     /** 확장자는 저장된 파일을 사람이 알아보게 하려는 것뿐이다. 재생은 Content-Type 이 결정한다. */

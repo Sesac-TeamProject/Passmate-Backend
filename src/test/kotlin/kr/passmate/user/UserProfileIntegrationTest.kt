@@ -34,6 +34,7 @@ class UserProfileIntegrationTest : IntegrationTestSupport() {
 
     private var userId: Long = 0
     private lateinit var token: String
+    private lateinit var otherToken: String
 
     @BeforeEach
     fun setUp() {
@@ -42,6 +43,11 @@ class UserProfileIntegrationTest : IntegrationTestSupport() {
         )
         userId = outcome.user.id
         token = jwtTokenProvider.issue(userId, outcome.user.isAdmin).accessToken
+
+        val other = userService.loginOrRegister(
+            AuthProvider.GOOGLE, "other-user", "other@example.com", "참가자", null,
+        )
+        otherToken = jwtTokenProvider.issue(other.user.id, other.user.isAdmin).accessToken
     }
 
     @Test
@@ -71,7 +77,9 @@ class UserProfileIntegrationTest : IntegrationTestSupport() {
     fun `내가 만든 방과 참여한 방을 센다`() {
         createRoom("첫 방")
         createRoom("둘째 방")
-        joinRoom(createRoom("남의 방"))
+        createRoom("셋째 방")
+        // 참여한 방은 남이 만든 방에 내가 입장한 것 — 호스트는 자기 방에 입장할 수 없다
+        joinRoomAs(othersRoom("남의 방"), token, "나-참가")
 
         mockMvc.perform(get("/users/me").header("Authorization", "Bearer $token"))
             .andExpect(jsonPath("$.stats.hostedRoomCount").value(3))
@@ -84,7 +92,7 @@ class UserProfileIntegrationTest : IntegrationTestSupport() {
     @Test
     fun `진행한 세션과 누적 학생은 종료된 방만 센다`() {
         val roomId = createRoom("끝낸 방")
-        joinRoom(roomId)
+        joinRoomAs(roomId, otherToken, "학생")
         endRoom(roomId)
         createRoom("아직 진행 중인 방")
 
@@ -108,12 +116,19 @@ class UserProfileIntegrationTest : IntegrationTestSupport() {
             kr.passmate.room.dto.RoomCreateRequest(title = title),
         ).id
 
-    private fun joinRoom(roomId: Long) {
+    /** 남이 만든 방 하나 — 호스트는 자기 방에 입장할 수 없어 참여 카운트는 남의 방으로만 만든다. */
+    private fun othersRoom(title: String): Long =
+        roomService.create(
+            userService.loginOrRegister(AuthProvider.GOOGLE, "owner-$title", null, title, null).user.id,
+            kr.passmate.room.dto.RoomCreateRequest(title = title),
+        ).id
+
+    private fun joinRoomAs(roomId: Long, joinToken: String, nickname: String) {
         mockMvc.perform(
             post("/rooms/{id}/participants", roomId)
-                .header("Authorization", "Bearer $token")
+                .header("Authorization", "Bearer $joinToken")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"nickname":"참가-$roomId","avatarId":"cat"}"""),
+                .content("""{"nickname":"$nickname","avatarId":"cat"}"""),
         ).andExpect(status().isCreated)
     }
 

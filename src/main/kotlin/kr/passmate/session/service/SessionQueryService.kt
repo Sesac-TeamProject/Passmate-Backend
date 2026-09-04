@@ -37,6 +37,12 @@ class SessionQueryService(
      * 랭킹. 점수는 답안 집계에서, 닉네임은 room 기능에서 각각 가져와 합친다.
      * 참가자는 room 소유라 session 이 직접 조회하지 않는다.
      */
+    /** 랭킹 조회(REST) — 방에 속한 사람만. 내부 집계·브로드캐스트는 인가 없는 ranking(roomId) 을 그대로 쓴다. */
+    fun ranking(roomId: Long, principal: AuthPrincipal): List<RankingEntry> {
+        participantQueryService.verifyBelongsToRoom(roomQueryService.getRoom(roomId), principal)
+        return ranking(roomId)
+    }
+
     fun ranking(roomId: Long): List<RankingEntry> {
         val participants = participantQueryService.listJoined(roomId).associateBy { it.id }
         return roomStateRepository.findRanking(roomId)
@@ -103,6 +109,7 @@ class SessionQueryService(
      */
     fun snapshot(roomId: Long, principal: AuthPrincipal): SessionSnapshotResponse {
         val room = roomQueryService.getRoom(roomId)
+        participantQueryService.verifyBelongsToRoom(room, principal)
         val all = sessionQuestions(roomId)
         val current = all.firstOrNull { it.isRunning }
 
@@ -141,8 +148,9 @@ class SessionQueryService(
     }
 
     /** 마감된 문항의 결과. 아직 진행 중이면 정답이 새지 않게 막는다. */
-    fun questionResult(roomId: Long, questionId: Long): QuestionResultResponse {
+    fun questionResult(roomId: Long, questionId: Long, principal: AuthPrincipal): QuestionResultResponse {
         val room = roomQueryService.getRoom(roomId)
+        participantQueryService.verifyBelongsToRoom(room, principal)
         val sq = findSessionQuestion(roomId, questionId)
         if (!sq.isEnded) throw BusinessException(ErrorCode.QUESTION_NOT_RUNNING, "아직 마감되지 않은 문항입니다.")
 
