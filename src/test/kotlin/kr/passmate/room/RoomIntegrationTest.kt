@@ -392,6 +392,20 @@ class RoomIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
     }
 
+    @Test
+    fun `호스트는 자기 방에 참가자로 입장할 수 없다`() {
+        val roomId = createdRoom().get("id").asLong()
+
+        // 방을 만든 본인이 참가자로 들어오면 403 — 프론트 버튼을 가려도 API 직접 호출로 뚫리면 안 된다
+        mockMvc.perform(
+            post("/rooms/{id}/participants", roomId).header("Authorization", "Bearer $hostToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"nickname":"호스트본인"}"""),
+        )
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("HOST_CANNOT_JOIN"))
+    }
+
     // ---------- helpers ----------
 
     private fun tokenFor(key: String): String {
