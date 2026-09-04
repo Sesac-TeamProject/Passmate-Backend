@@ -269,6 +269,21 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
         assertThat(mcq.get("finalScore").asInt()).isZero()
     }
 
+    @Test
+    fun `강퇴당한 학생도 제출한 답안은 리포트 집계에 남는다`() {
+        start()
+        submit(studentToken, mcqId, "찾을 수 없음")   // 정답 제출 후
+        participantService.kick(roomId, studentParticipantId, hostId)   // 호스트가 내보냄
+        endSession()
+
+        // 결정: 낸 답안·점수는 기록으로 남긴다 — 빼면 합계·평균이 어긋난다(웹 버그 리포트 #5)
+        val body = results(hostToken).andExpect(status().isOk).andReturn().json()
+        val kicked = body.get("participants").find { it.get("participantId").asLong() == studentParticipantId }
+        assertThat(kicked).isNotNull
+        assertThat(kicked!!.get("submitCount").asInt()).isEqualTo(1)
+        assertThat(kicked.get("totalScore").asLong()).isPositive()
+    }
+
     private fun runWholeSession() {
         start()
         submit(studentToken, mcqId, "찾을 수 없음")
