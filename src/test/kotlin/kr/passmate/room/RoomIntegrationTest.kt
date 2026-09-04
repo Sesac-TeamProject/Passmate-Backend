@@ -77,7 +77,12 @@ class RoomIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("CANCELED"))
 
+        // 끝난 방은 "없는 방"이 아니라 "이미 끝난 방"으로 안내한다(웹 QA_BACKLOG B-4)
         mockMvc.perform(get("/rooms/pin/{pin}", pin))
+            .andExpect(status().isGone)
+            .andExpect(jsonPath("$.code").value("ROOM_ENDED"))
+
+        mockMvc.perform(get("/rooms/pin/{pin}", "000000"))
             .andExpect(status().isNotFound)
             .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"))
     }

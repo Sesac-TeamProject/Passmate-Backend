@@ -66,6 +66,10 @@ enum class ErrorCode(val status: HttpStatus, val message: String) {
     ALREADY_JOINED(HttpStatus.CONFLICT, "이미 입장한 방입니다."),
     QUESTION_SET_ALREADY_CONFIRMED(HttpStatus.CONFLICT, "이미 확정된 문제 세트입니다."),
     QUESTION_SET_EMPTY(HttpStatus.CONFLICT, "문항이 하나도 없는 세트는 확정할 수 없습니다."),
+
+    // 410 — 없는 방(404)과 "이미 끝난 방"을 화면이 구분해 안내한다(웹 QA_BACKLOG B-4)
+    ROOM_ENDED(HttpStatus.GONE, "이미 종료된 방입니다."),
+
     // 429 — 무료 한도 소진. 생성용 코인 정책이 정해지면 402 로 바뀔 자리다
     AI_FREE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "AI 문항 생성 무료 횟수를 모두 사용했습니다."),
 
