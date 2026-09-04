@@ -54,6 +54,10 @@ class ParticipantService(
 
         room.verifyJoinable()
         verifyGuestAllowed(room, userId)
+        // 호스트는 자기 방에 참가자로 들어올 수 없다 — 프론트 버튼을 가려도 API 직접 호출로 뚫리면 안 되므로 서버에서 막는다
+        if (userId != null && userId == room.hostUserId) {
+            throw BusinessException(ErrorCode.HOST_CANNOT_JOIN)
+        }
 
         val nickname = request.nickname.trim()
         if (participantRepository.existsByRoomIdAndNickname(roomId, nickname)) {
