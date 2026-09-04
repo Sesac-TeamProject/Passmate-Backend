@@ -288,6 +288,58 @@ class SessionFlowTest : IntegrationTestSupport() {
         snapshot(hostToken).andExpect(jsonPath("$.status").value("ENDED"))
     }
 
+    @Test
+    fun `현재 문항 마감은 호스트만 할 수 있다`() {
+        val other = jwtTokenProvider.issue(member("sess-other2"), false).accessToken
+        start()
+
+        mockMvc.perform(post("/rooms/{id}/session/current/end", roomId).header("Authorization", "Bearer $other"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("NOT_ROOM_HOST"))
+    }
+
+    @Test
+    fun `시작 전의 방은 문항을 마감할 수 없다`() {
+        mockMvc.perform(post("/rooms/{id}/session/current/end", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("SESSION_NOT_RUNNING"))
+    }
+
+    @Test
+    fun `열려 있는 문항이 없으면 마감은 409 다`() {
+        start()
+        endCurrent()
+
+        mockMvc.perform(post("/rooms/{id}/session/current/end", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("QUESTION_NOT_RUNNING"))
+    }
+
+    @Test
+    fun `참가자도 랭킹을 볼 수 있고 제출 전에는 비어 있다`() {
+        start()
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $guestToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.length()").value(0))
+
+        submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $guestToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].rank").value(1))
+            .andExpect(jsonPath("$[0].nickname").value("게스트"))
+    }
+
+    @Test
+    fun `랭킹 조회는 인증이 필요하다`() {
+        start()
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId))
+            .andExpect(status().isUnauthorized)
+    }
+
     // ---------- helpers ----------
 
     private fun start() = mockMvc.perform(post("/rooms/{id}/session/start", roomId).header("Authorization", "Bearer $hostToken"))
