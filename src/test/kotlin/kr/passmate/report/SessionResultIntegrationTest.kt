@@ -254,6 +254,21 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
     // ---------- helpers ----------
 
     /** 객관식(학생 정답·게스트 오답) → 서술형(학생만 제출) → 종료. */
+    @Test
+    fun `오답 객관식은 내 결과에 오답·0점으로 나온다 — 무조건 정답·만점이 아니다`() {
+        start()
+        submit(studentToken, mcqId, "성공")   // 정답은 "찾을 수 없음" — 오답 제출
+        endSession()
+
+        val body = myResult(studentToken).andExpect(status().isOk).andReturn().json()
+        val mcq = body.get("questions")[0]
+
+        // 프론트 버그 리포트 #4 "채점 무조건 100점" 이 백엔드에서 재현되지 않음을 못박는다
+        assertThat(mcq.get("isCorrect").asBoolean()).isFalse()
+        assertThat(mcq.get("score").asInt()).isZero()
+        assertThat(mcq.get("finalScore").asInt()).isZero()
+    }
+
     private fun runWholeSession() {
         start()
         submit(studentToken, mcqId, "찾을 수 없음")
