@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import kr.passmate.common.dto.PageResponse
+import kr.passmate.common.security.AuthPrincipal
 import kr.passmate.common.security.CurrentUser
 import kr.passmate.common.security.UserPrincipal
 import kr.passmate.room.dto.PublicRoomResponse
@@ -57,10 +58,12 @@ class RoomController(
     ): PageResponse<PublicRoomResponse> =
         PageResponse.from(publicRoomQueryService.search(request, principal?.userId)) { it }
 
-    @Operation(summary = "방 상세 조회")
+    @Operation(summary = "방 상세 조회", description = "PIN 을 담고 있어 방에 속한 사람(호스트·참가자)만 볼 수 있다.")
     @GetMapping("/{roomId}")
-    fun get(@PathVariable roomId: Long): RoomResponse =
-        RoomResponse.from(roomQueryService.getRoom(roomId))
+    fun get(
+        @CurrentUser principal: AuthPrincipal,
+        @PathVariable roomId: Long,
+    ): RoomResponse = RoomResponse.from(roomQueryService.getRoomDetail(roomId, principal))
 
     @Operation(summary = "방 정보 수정", description = "대기 중일 때만 수정할 수 있다.")
     @PutMapping("/{roomId}")

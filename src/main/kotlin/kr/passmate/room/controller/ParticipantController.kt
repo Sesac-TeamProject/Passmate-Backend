@@ -50,10 +50,13 @@ class ParticipantController(
             participantService.join(roomId, (principal as? UserPrincipal)?.userId, request),
         )
 
-    @Operation(summary = "참가자 목록 조회", description = "대기실 초기 로딩·재접속용. 나간 참가자는 빠진다.")
+    @Operation(summary = "참가자 목록 조회", description = "대기실 초기 로딩·재접속용. 나간 참가자는 빠진다. 방에 속한 사람만 볼 수 있다.")
     @GetMapping
-    fun list(@PathVariable roomId: Long): List<ParticipantResponse> =
-        participantQueryService.listJoined(roomId).map(ParticipantResponse::from)
+    fun list(
+        @CurrentUser principal: AuthPrincipal,
+        @PathVariable roomId: Long,
+    ): List<ParticipantResponse> =
+        participantQueryService.listJoined(roomId, principal).map(ParticipantResponse::from)
 
     @Operation(
         summary = "닉네임 중복 확인",

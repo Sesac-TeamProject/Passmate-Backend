@@ -244,7 +244,7 @@ class RoomIntegrationTest : IntegrationTestSupport() {
         val room = createdRoom()
         val roomId = room.get("id").asLong()
 
-        mockMvc.perform(get("/rooms/{id}", roomId).header("Authorization", "Bearer $otherToken"))
+        mockMvc.perform(get("/rooms/{id}", roomId).header("Authorization", "Bearer $hostToken"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").value(roomId))
             .andExpect(jsonPath("$.title").value("CS 면접 대비"))
@@ -354,6 +354,37 @@ class RoomIntegrationTest : IntegrationTestSupport() {
         mockMvc.perform(get("/rooms/{id}/participants/nickname-check", 999_999L).param("nickname", "아무개"))
             .andExpect(status().isNotFound)
             .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"))
+    }
+
+    @Test
+    fun `방 상세와 참가자 목록은 방에 속한 사람만 본다`() {
+        val roomId = createdRoom().get("id").asLong()
+
+        mockMvc.perform(get("/rooms/{id}", roomId).header("Authorization", "Bearer $otherToken"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        mockMvc.perform(get("/rooms/{id}/participants", roomId).header("Authorization", "Bearer $otherToken"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        // 입장하면 열린다
+        joinAsMember(roomId, "회원참가자", otherToken).andExpect(status().isCreated)
+        mockMvc.perform(get("/rooms/{id}", roomId).header("Authorization", "Bearer $otherToken"))
+            .andExpect(status().isOk)
+        mockMvc.perform(get("/rooms/{id}/participants", roomId).header("Authorization", "Bearer $otherToken"))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `다른 방 게스트 토큰으로는 참가자 목록을 볼 수 없다`() {
+        val roomA = createdRoom().get("id").asLong()
+        val roomB = createdRoom().get("id").asLong()
+        val guestB = joinAsGuest(roomB, "비방게스트").andReturn().json().get("accessToken").asText()
+
+        mockMvc.perform(get("/rooms/{id}/participants", roomA).header("Authorization", "Bearer $guestB"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
     }
 
     // ---------- helpers ----------

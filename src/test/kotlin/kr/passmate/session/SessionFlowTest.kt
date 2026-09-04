@@ -30,6 +30,9 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 @AutoConfigureMockMvc
 @Transactional
@@ -338,6 +341,53 @@ class SessionFlowTest : IntegrationTestSupport() {
 
         mockMvc.perform(get("/rooms/{id}/session/ranking", roomId))
             .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `참가하지 않은 회원은 세션 조회 API 를 볼 수 없다`() {
+        val outsider = jwtTokenProvider.issue(member("sess-outsider"), false).accessToken
+        start()
+
+        snapshot(outsider)
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $outsider"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        endCurrent()
+        mockMvc.perform(get("/rooms/{id}/session/questions/{q}/result", roomId, mcqId).header("Authorization", "Bearer $outsider"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+    }
+
+    @Test
+    fun `다른 방 게스트 토큰으로는 세션을 볼 수 없다`() {
+        val otherRoom = roomService.create(hostId, RoomCreateRequest(title = "다른 방", type = RoomType.FREE))
+        val foreignGuest = participantService.join(otherRoom.id, null, JoinRoomRequest(nickname = "남의방게스트")).accessToken!!
+        start()
+
+        snapshot(foreignGuest)
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+
+        mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $foreignGuest"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+    }
+
+    @Test
+    fun `문항 마감 시각은 UTC 기준으로 내려온다`() {
+        start()
+
+        val endsAt = snapshot(hostToken).andReturn().json()
+            .get("currentQuestion").get("endsAt").asText()
+            .let { LocalDateTime.parse(it) }
+
+        // 계약은 "오프셋 없는 UTC". JVM 기본 시간대(KST)로 발급되면 9시간 어긋난다 — 프론트 QA_BACKLOG B-1
+        val nowUtc = LocalDateTime.now(ZoneOffset.UTC)
+        assertThat(Duration.between(nowUtc, endsAt).abs()).isLessThan(Duration.ofMinutes(5))
     }
 
     // ---------- helpers ----------

@@ -2,7 +2,11 @@ package kr.passmate.room.service
 
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
+import kr.passmate.common.security.AuthPrincipal
+import kr.passmate.common.security.GuestPrincipal
+import kr.passmate.common.security.UserPrincipal
 import kr.passmate.room.domain.Participant
+import kr.passmate.room.domain.Room
 import kr.passmate.room.domain.ParticipantStatus
 import kr.passmate.room.repository.ParticipantRepository
 import kr.passmate.room.repository.RoomRepository
@@ -27,6 +31,26 @@ class ParticipantQueryService(
         verifyRoomExists(roomId)
         return participantRepository
             .findAllByRoomIdAndStatusOrderByJoinedAtAsc(roomId, ParticipantStatus.JOINED)
+    }
+
+    /** 대기실 참가자 목록(REST) — 방에 속한 사람(호스트·참가자)만 본다. */
+    fun listJoined(roomId: Long, principal: AuthPrincipal): List<Participant> {
+        val room = roomRepository.findById(roomId)
+            .orElseThrow { BusinessException(ErrorCode.ROOM_NOT_FOUND) }
+        verifyBelongsToRoom(room, principal)
+        return listJoined(roomId)
+    }
+
+    /**
+     * 방의 호스트 또는 입장한 참가자만 통과시킨다.
+     * 게스트 토큰은 발급받은 방 하나에만 유효하다 — STOMP 구독 인가(RoomSubscriptionAuthorizer)와 같은 규칙.
+     */
+    fun verifyBelongsToRoom(room: Room, principal: AuthPrincipal) {
+        val allowed = when (principal) {
+            is UserPrincipal -> principal.userId == room.hostUserId || isJoined(room.id, principal.userId)
+            is GuestPrincipal -> principal.roomId == room.id
+        }
+        if (!allowed) throw BusinessException(ErrorCode.ACCESS_DENIED, "이 방에 입장한 사람만 볼 수 있습니다.")
     }
 
     /**
