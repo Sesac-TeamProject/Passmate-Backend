@@ -146,8 +146,13 @@ class Question(
         when (type) {
             QuestionType.MCQ -> {
                 val options = choices.orEmpty()
-                if (options.size < MIN_CHOICES) {
-                    throw BusinessException(ErrorCode.INVALID_QUESTION, "객관식은 보기가 ${MIN_CHOICES}개 이상이어야 합니다.")
+                // 상한을 두는 이유: 화면이 보기 키를 A·B·C·D 로 고정해 5번째부터 정답을 잃는다(웹 QA_BACKLOG B-16).
+                // AI 생성은 이미 정확히 4개로 강제하므로 직접 작성만 열려 있던 구멍이다
+                if (options.size !in MIN_CHOICES..MAX_CHOICES) {
+                    throw BusinessException(
+                        ErrorCode.INVALID_QUESTION,
+                        "객관식 보기는 ${MIN_CHOICES}~${MAX_CHOICES}개여야 합니다.",
+                    )
                 }
                 if (answer !in options) {
                     throw BusinessException(ErrorCode.INVALID_QUESTION, "정답은 보기 중 하나여야 합니다.")
@@ -175,6 +180,7 @@ class Question(
         const val MIN_POINTS = 1
         const val MAX_POINTS = 1000
         const val MIN_CHOICES = 2
+        const val MAX_CHOICES = 4
         val OX_ANSWERS = setOf("O", "X")
     }
 }

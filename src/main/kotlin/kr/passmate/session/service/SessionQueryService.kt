@@ -17,6 +17,7 @@ import kr.passmate.session.dto.RankingEntry
 import kr.passmate.session.dto.SessionSnapshotResponse
 import kr.passmate.session.dto.SubmissionStatusPayload
 import kr.passmate.session.repository.AnswerRepository
+import kr.passmate.session.repository.ParticipantScore
 import kr.passmate.session.repository.RoomStateRepository
 import kr.passmate.session.repository.SessionQuestionRepository
 import org.springframework.stereotype.Service
@@ -43,15 +44,34 @@ class SessionQueryService(
         return ranking(roomId)
     }
 
-    fun ranking(roomId: Long): List<RankingEntry> {
+    fun ranking(roomId: Long): List<RankingEntry> =
+        toEntries(roomId, roomStateRepository.findRanking(roomId))
+
+    /**
+     * [orderNo] 번 문항 마감 시점의 랭킹 + **직전 문항 대비 순위 변동**(웹 QA_BACKLOG B-17).
+     *
+     * 변동은 직전 시점에도 점수가 있던 참가자만 낸다 — 1번 문항이거나 그때 답안이 없던 사람은 null 이다.
+     * 0 으로 채우면 화면이 "변동 없음"으로 그려 실제로 추적한 값처럼 보인다.
+     */
+    fun rankingAsOf(roomId: Long, orderNo: Int): List<RankingEntry> {
+        val current = toEntries(roomId, roomStateRepository.findRankingAsOf(roomId, orderNo))
+        val previousRanks = toEntries(roomId, roomStateRepository.findRankingAsOf(roomId, orderNo - 1))
+            .associate { it.participantId to it.rank }
+
+        return current.map { entry ->
+            entry.copy(rankChange = previousRanks[entry.participantId]?.let { it - entry.rank })
+        }
+    }
+
+    /** 점수 목록에 닉네임을 붙이고 등수를 매긴다. 동점은 같은 등수로 묶는다(공동 3등 다음은 5등). */
+    private fun toEntries(roomId: Long, scores: List<ParticipantScore>): List<RankingEntry> {
         val participants = participantQueryService.listJoined(roomId).associateBy { it.id }
-        return roomStateRepository.findRanking(roomId)
+        return scores
             .mapNotNull { score ->
                 participants[score.participantId]?.let {
                     RankingEntry(0, it.id, it.nickname, it.avatarId, score.totalScore)
                 }
             }
-            // 동점은 같은 등수로 묶는다(공동 3등 다음은 5등)
             .let { rows ->
                 var rank = 0
                 var prev: Long? = null
@@ -84,6 +104,20 @@ class SessionQueryService(
 
     fun sessionQuestions(roomId: Long): List<SessionQuestion> =
         sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(roomId)
+
+    /**
+     * [sq] 의 정답률이 **직전에 마감된 문항**보다 얼마나 오르내렸는지(%p, 웹 QA_BACKLOG B-17).
+     *
+     * 호스트가 문항을 건너뛸 수 있어 orderNo - 1 이 아니라 "앞쪽에서 마감된 것 중 가장 뒤"와 견준다.
+     * 견줄 문항이 없으면 null 이다 — 0 은 "변동 없음"이라는 뜻이라 구분되어야 한다.
+     */
+    fun accuracyDeltaOf(sq: SessionQuestion): Double? {
+        val previous = sessionQuestions(sq.roomId)
+            .filter { it.orderNo < sq.orderNo && it.isEnded }
+            .maxByOrNull { it.orderNo }
+            ?: return null
+        return (sq.correctRate ?: return null).toDouble() - (previous.correctRate ?: return null).toDouble()
+    }
 
     fun findSessionQuestion(roomId: Long, questionId: Long): SessionQuestion =
         sessionQuestionRepository.findByRoomIdAndQuestionId(roomId, questionId)
@@ -165,8 +199,9 @@ class SessionQueryService(
             submitCount = sq.submitCount,
             correctCount = sq.correctCount,
             correctRate = sq.correctRate?.toDouble() ?: 0.0,
+            accuracyDelta = accuracyDeltaOf(sq),
             distribution = sq.answerDistribution.orEmpty(),
-            ranking = ranking(roomId),
+            ranking = rankingAsOf(roomId, sq.orderNo),
         )
     }
 

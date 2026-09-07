@@ -122,6 +122,27 @@ class LearningReportIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `반 평균·1위 정답률과 주제별 정답률이 함께 온다`() {
+        runSession()
+
+        val body = myReport(studentToken).andExpect(status().isOk).andReturn().json()
+
+        // 학생 50% · 게스트 0% → 반 평균 25, 1위 50. 정의는 accuracy 와 같다(문항 수 분모, 미제출 = 오답)
+        assertThat(body.get("classAvgAccuracy").asDouble()).isEqualTo(25.0)
+        assertThat(body.get("topAccuracy").asDouble()).isEqualTo(50.0)
+
+        // "개념별 정답률" 카드(웹 버그 리포트 B-20). 문항 순서대로 처음 나온 주제 순
+        val topics = body.get("topicAccuracy")
+        assertThat(topics).hasSize(2)
+        assertThat(topics[0].get("topic").asText()).isEqualTo("HTTP")
+        assertThat(topics[0].get("correctCount").asInt()).isEqualTo(1)
+        assertThat(topics[0].get("totalCount").asInt()).isEqualTo(1)
+        assertThat(topics[0].get("accuracy").asDouble()).isEqualTo(100.0)
+        assertThat(topics[1].get("topic").asText()).isEqualTo("네트워크 계층")
+        assertThat(topics[1].get("accuracy").asDouble()).isEqualTo(0.0)
+    }
+
+    @Test
     fun `세션이 끝나기 전에는 리포트가 없다`() {
         start()
 

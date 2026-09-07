@@ -16,8 +16,15 @@ class JpaRoomStateRepository(
 ) : RoomStateRepository {
 
     override fun findRanking(roomId: Long): List<ParticipantScore> =
-        answerQueryRepository.sumScoreByParticipant(roomId)
-            .sortedWith(compareByDescending<ParticipantScore> { it.totalScore }.thenBy { it.participantId })
+        answerQueryRepository.sumScoreByParticipant(roomId).sortedForRanking()
+
+    override fun findRankingAsOf(roomId: Long, upToOrderNo: Int): List<ParticipantScore> {
+        if (upToOrderNo < FIRST_ORDER_NO) return emptyList()
+        return answerQueryRepository.sumScoreByParticipantUpTo(roomId, upToOrderNo).sortedForRanking()
+    }
+
+    private fun List<ParticipantScore>.sortedForRanking() =
+        sortedWith(compareByDescending<ParticipantScore> { it.totalScore }.thenBy { it.participantId })
 
     override fun findSubmissionStat(sessionQuestionId: Long): SubmissionStat {
         val answers: List<Answer> = answerRepository.findAllBySessionQuestionId(sessionQuestionId)
@@ -30,5 +37,9 @@ class JpaRoomStateRepository(
                 .groupingBy { it.submitted }
                 .eachCount(),
         )
+    }
+
+    private companion object {
+        const val FIRST_ORDER_NO = 1
     }
 }
