@@ -3,6 +3,7 @@ package kr.passmate.report.service
 import kr.passmate.common.security.AuthPrincipal
 import kr.passmate.feedback.dto.AnswerFeedbackView
 import kr.passmate.feedback.service.AnswerFeedbackQueryService
+import kr.passmate.feedback.service.QuestionCommentQueryService
 import kr.passmate.rating.service.RoomRatingQueryService
 import kr.passmate.report.dto.AnswerResultView
 import kr.passmate.report.dto.MySessionResultResponse
@@ -34,6 +35,7 @@ class SessionResultQueryService(
     private val answerQueryService: AnswerQueryService,
     private val materialsLoader: SessionMaterialsLoader,
     private val answerFeedbackQueryService: AnswerFeedbackQueryService,
+    private val questionCommentQueryService: QuestionCommentQueryService,
     private val roomRatingQueryService: RoomRatingQueryService,
 ) {
 
@@ -44,6 +46,7 @@ class SessionResultQueryService(
         val m = materialsLoader.load(room)
 
         val analyzedByAnswer = answerFeedbackQueryService.viewsOf(m.answers.map { it.id })
+        val comments = questionCommentQueryService.commentsOf(m.sessionQuestions.map { it.id })
 
         val questionRows = m.sessionQuestions.map { sq ->
             val answers = m.answersBySessionQuestion[sq.id].orEmpty()
@@ -61,6 +64,7 @@ class SessionResultQueryService(
                 correctCount = correct,
                 correctRate = SessionMaterials.percent(correct, graded.size),
                 aiAnalysisCount = answers.count { analyzedByAnswer[it.id]?.analysis != null },
+                teacherComment = comments[sq.id],
             )
         }
 
@@ -155,6 +159,7 @@ class SessionResultQueryService(
     private fun answerViews(m: SessionMaterials, answers: List<Answer>): List<AnswerResultView> {
         val byQuestion = answers.associateBy { it.sessionQuestionId }
         val feedbacks = answerFeedbackQueryService.viewsOf(answers.map { it.id })
+        val comments = questionCommentQueryService.commentsOf(m.sessionQuestions.map { it.id })
 
         return m.sessionQuestions.map { sq ->
             val answer = byQuestion[sq.id]
@@ -180,6 +185,7 @@ class SessionResultQueryService(
                 analysisStatus = feedback.analysisStatus,
                 analysis = feedback.analysis,
                 teacherReview = feedback.teacherReview,
+                teacherComment = comments[sq.id],
             )
         }
     }

@@ -83,6 +83,13 @@ class QuestionCommentIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.comment").value("전반적으로 개념 정리가 필요합니다"))
             .andExpect(jsonPath("$.questionId").value(mcqId))
 
+        // 방 리포트 문항별 탭 — 저장창을 다시 열 때 기존 값을 채운다
+        mockMvc.perform(get("/rooms/{id}/results", roomId).header(AUTH, bearer(hostToken)))
+            .andExpect(jsonPath("$.questions[0].teacherComment").value("전반적으로 개념 정리가 필요합니다"))
+
+        // 학생 결과 — M-06 "선생님 코멘트가 도착하면 여기에 표시돼요" 자리
+        mockMvc.perform(get("/rooms/{id}/results/me", roomId).header(AUTH, bearer(studentToken)))
+            .andExpect(jsonPath("$.questions[0].teacherComment").value("전반적으로 개념 정리가 필요합니다"))
     }
 
     @Test
@@ -94,6 +101,17 @@ class QuestionCommentIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.comment").value("고친 코멘트"))
 
+        mockMvc.perform(get("/rooms/{id}/results", roomId).header(AUTH, bearer(hostToken)))
+            .andExpect(jsonPath("$.questions[0].teacherComment").value("고친 코멘트"))
+    }
+
+    @Test
+    fun `저장 전에는 코멘트 필드가 없다`() {
+        runSession()
+
+        mockMvc.perform(get("/rooms/{id}/results/me", roomId).header(AUTH, bearer(studentToken)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.questions[0].teacherComment").doesNotExist())
     }
 
     @Test

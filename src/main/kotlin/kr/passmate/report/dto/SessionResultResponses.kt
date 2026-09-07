@@ -35,6 +35,8 @@ data class QuestionResultRow(
     val correctCount: Int,
     val correctRate: Double,
     val aiAnalysisCount: Int,
+    @field:Schema(description = "문항 단위 선생님 코멘트(학생 전체 대상, W-07). 답안별 첨삭과 별개. 없으면 null")
+    val teacherComment: String?,
 )
 
 /** 학생별 점수·순위 (W-07 학생별 탭). */
@@ -91,6 +93,8 @@ data class AnswerResultView(
     val analysisStatus: AnalysisStatus,
     val analysis: EssayAnalysisView?,
     val teacherReview: TeacherReviewView?,
+    @field:Schema(description = "문항 단위 선생님 코멘트 — 학생 전체에게 남긴 첨삭(M-06). 내 답안별 첨삭(teacherReview)과 별개")
+    val teacherComment: String?,
 )
 
 @Schema(description = "내 세션 결과")
