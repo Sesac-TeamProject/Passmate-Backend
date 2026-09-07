@@ -20,6 +20,7 @@ import java.time.LocalDateTime
 class QuestionTimeoutScheduler(
     private val sessionQuestionRepository: SessionQuestionRepository,
     private val sessionService: SessionService,
+    private val policy: kr.passmate.common.config.PolicyProperties,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -36,6 +37,15 @@ class QuestionTimeoutScheduler(
         expired.forEach { sq ->
             runCatching { sessionService.endByTimeout(sq.id) }
                 .onFailure { log.warn("문항 자동 마감 실패 — sessionQuestionId={}", sq.id, it) }
+        }
+
+        // 자동 넘김(W-02b): 마감된 지 결과 표시 시간이 지난 문항의 다음 문항을 연다.
+        // 곧바로 열지 않는 이유 — QUESTION_ENDED 의 정답·분포(W-06)를 볼 시간이 없어진다
+        val due = sessionQuestionRepository
+            .findAutoAdvanceDue(LocalDateTime.now().minusSeconds(policy.autoAdvanceDelaySeconds))
+        due.forEach { sq ->
+            runCatching { sessionService.advanceByAutoAdvance(sq.id) }
+                .onFailure { log.warn("자동 넘김 실패 — sessionQuestionId={}", sq.id, it) }
         }
     }
 

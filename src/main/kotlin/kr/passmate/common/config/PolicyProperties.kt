@@ -33,4 +33,9 @@ data class PolicyProperties(
     val hostEarningRate: Double,
     /** 게스트 기록 보관 일수 (지나면 GuestPurgeJob 이 파기) */
     val guestRetentionDays: Long,
+    /**
+     * 자동 넘김 문항이 시간 만료로 마감된 뒤 다음 문항을 열기까지의 간격(초).
+     * 곧바로 열면 결과 화면(W-06)이 스쳐 지나가 정답·분포를 볼 수 없다.
+     */
+    val autoAdvanceDelaySeconds: Long,
 )
