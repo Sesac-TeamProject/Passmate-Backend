@@ -9,6 +9,10 @@ import kr.passmate.room.service.JoinResult
 import kr.passmate.room.service.NicknameCheckResult
 import java.time.LocalDateTime
 
+/**
+ * 방 상세. 대기실(W-04)이 이 한 번의 응답으로 머리말(호스트 이름)과 KPI(문항 수·문항당 제한)를 채운다 —
+ * 세트 목록·세트 상세를 따로 읽지 않게(웹 버그 리포트 B-21).
+ */
 @Schema(description = "방 상세")
 data class RoomResponse(
     val id: Long,
@@ -20,7 +24,17 @@ data class RoomResponse(
     val type: RoomType,
     val fee: Int?,
     val questionSetId: Long?,
+    @field:Schema(description = "연결한 세트의 문항 수. 세트를 아직 연결하지 않았으면 null")
+    val questionCount: Int?,
+    @field:Schema(description = "연결한 세트의 예상 소요 시간(초, 문항 제한시간 합). 세트가 없으면 null")
+    val estimatedSeconds: Int?,
+    @field:Schema(description = "문항 제한시간의 최소(초). 전부 같으면 max 와 같다")
+    val minTimeLimitSec: Int?,
+    @field:Schema(description = "문항 제한시간의 최대(초)")
+    val maxTimeLimitSec: Int?,
     val hostUserId: Long,
+    @field:Schema(description = "호스트. 대기실 머리말의 선생님 이름 — 공개 방 카드와 같은 모양")
+    val host: PublicRoomHostResponse,
     val maxParticipants: Int?,
     val participantCount: Int,
     val isPublic: Boolean,
@@ -31,7 +45,14 @@ data class RoomResponse(
     val endedAt: LocalDateTime?,
 ) {
     companion object {
-        fun from(room: Room) = RoomResponse(
+        fun of(
+            room: Room,
+            hostNickname: String?,
+            questionCount: Int?,
+            estimatedSeconds: Int?,
+            minTimeLimitSec: Int?,
+            maxTimeLimitSec: Int?,
+        ) = RoomResponse(
             id = room.id,
             title = room.title,
             description = room.description,
@@ -41,7 +62,12 @@ data class RoomResponse(
             type = room.type,
             fee = room.fee,
             questionSetId = room.questionSetId,
+            questionCount = questionCount,
+            estimatedSeconds = estimatedSeconds,
+            minTimeLimitSec = minTimeLimitSec,
+            maxTimeLimitSec = maxTimeLimitSec,
             hostUserId = room.hostUserId,
+            host = PublicRoomHostResponse.of(room.hostUserId, hostNickname),
             maxParticipants = room.maxParticipants,
             participantCount = room.participantCount,
             isPublic = room.isPublic,
