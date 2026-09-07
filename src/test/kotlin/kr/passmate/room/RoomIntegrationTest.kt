@@ -3,6 +3,10 @@ package kr.passmate.room
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import kr.passmate.common.security.JwtTokenProvider
+import kr.passmate.question.domain.QuestionType
+import kr.passmate.question.dto.QuestionRequest
+import kr.passmate.question.dto.QuestionSetCreateRequest
+import kr.passmate.question.service.QuestionSetService
 import kr.passmate.support.IntegrationTestSupport
 import kr.passmate.user.domain.AuthProvider
 import kr.passmate.user.service.UserService
@@ -31,14 +35,18 @@ class RoomIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var objectMapper: ObjectMapper
     @Autowired private lateinit var userService: UserService
     @Autowired private lateinit var jwtTokenProvider: JwtTokenProvider
+    @Autowired private lateinit var questionSetService: QuestionSetService
 
+    private var hostId: Long = 0
     private lateinit var hostToken: String
     private lateinit var otherToken: String
 
     @BeforeEach
     fun setUp() {
-        hostToken = tokenFor("host")
-        otherToken = tokenFor("other")
+        val host = register("host")
+        hostId = host.first
+        hostToken = host.second
+        otherToken = register("other").second
     }
 
     // ---------- 방 개설 ----------
@@ -262,6 +270,36 @@ class RoomIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `방 상세에 호스트 닉네임과 연결 세트의 문항 수·소요 시간이 실린다`() {
+        val setId = confirmedSet(timeLimits = listOf(30, 60))
+        val roomId = mockMvc.perform(
+            post("/rooms").header("Authorization", "Bearer $hostToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"title":"세트 있는 방","questionSetId":$setId}"""),
+        ).andExpect(status().isCreated).andReturn().json().get("id").asLong()
+
+        // 대기실(W-04)이 방 상세 한 번으로 머리말·KPI 를 채운다 — 세트 목록·상세를 따로 읽지 않게(웹 버그 리포트 B-21)
+        mockMvc.perform(get("/rooms/{id}", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.host.userId").value(hostId))
+            .andExpect(jsonPath("$.host.nickname").value("host"))
+            .andExpect(jsonPath("$.questionCount").value(2))
+            .andExpect(jsonPath("$.estimatedSeconds").value(90))
+            .andExpect(jsonPath("$.minTimeLimitSec").value(30))
+            .andExpect(jsonPath("$.maxTimeLimitSec").value(60))
+    }
+
+    @Test
+    fun `세트를 연결하지 않은 방은 문항 수가 없다`() {
+        createRoom()
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.host.nickname").value("host"))
+            .andExpect(jsonPath("$.questionCount").doesNotExist())
+            .andExpect(jsonPath("$.estimatedSeconds").doesNotExist())
+            .andExpect(jsonPath("$.minTimeLimitSec").doesNotExist())
+    }
+
+    @Test
     fun `방 상세 조회는 인증이 필요하고 없는 방이면 404 다`() {
         val roomId = createdRoom().get("id").asLong()
 
@@ -408,7 +446,7 @@ class RoomIntegrationTest : IntegrationTestSupport() {
 
     // ---------- helpers ----------
 
-    private fun tokenFor(key: String): String {
+    private fun register(key: String): Pair<Long, String> {
         val outcome = userService.loginOrRegister(
             provider = AuthProvider.GOOGLE,
             providerId = "test-$key",
@@ -416,7 +454,20 @@ class RoomIntegrationTest : IntegrationTestSupport() {
             name = key,
             profileImageUrl = null,
         )
-        return jwtTokenProvider.issue(outcome.user.id, outcome.user.isAdmin).accessToken
+        return outcome.user.id to jwtTokenProvider.issue(outcome.user.id, outcome.user.isAdmin).accessToken
+    }
+
+    /** 제한시간만 다른 OX 문항으로 확정 세트를 만든다. 방 상세의 세트 요약을 볼 때 쓴다 */
+    private fun confirmedSet(timeLimits: List<Int>): Long {
+        val set = questionSetService.create(hostId, QuestionSetCreateRequest("세트"))
+        timeLimits.forEachIndexed { index, sec ->
+            questionSetService.addQuestion(
+                set.id, hostId,
+                QuestionRequest(QuestionType.OX, "문항 ${index + 1}", answer = "O", timeLimitSec = sec),
+            )
+        }
+        questionSetService.confirm(set.id, hostId)
+        return set.id
     }
 
     private fun createRoom(maxParticipants: Int? = null): ResultActions {

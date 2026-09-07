@@ -44,7 +44,7 @@ class RoomController(
     fun create(
         @CurrentUser principal: UserPrincipal,
         @Valid @RequestBody request: RoomCreateRequest,
-    ): RoomResponse = RoomResponse.from(roomService.create(principal.userId, request))
+    ): RoomResponse = roomQueryService.toResponse(roomService.create(principal.userId, request))
 
     @Operation(
         summary = "공개 방 목록·검색 조회",
@@ -63,7 +63,7 @@ class RoomController(
     fun get(
         @CurrentUser principal: AuthPrincipal,
         @PathVariable roomId: Long,
-    ): RoomResponse = RoomResponse.from(roomQueryService.getRoomDetail(roomId, principal))
+    ): RoomResponse = roomQueryService.toResponse(roomQueryService.getRoomDetail(roomId, principal))
 
     @Operation(summary = "방 정보 수정", description = "대기 중일 때만 수정할 수 있다.")
     @PutMapping("/{roomId}")
@@ -71,7 +71,7 @@ class RoomController(
         @CurrentUser principal: UserPrincipal,
         @PathVariable roomId: Long,
         @Valid @RequestBody request: RoomUpdateRequest,
-    ): RoomResponse = RoomResponse.from(roomService.update(roomId, principal.userId, request))
+    ): RoomResponse = roomQueryService.toResponse(roomService.update(roomId, principal.userId, request))
 
     @Operation(
         summary = "방 종료(취소)",
@@ -81,7 +81,7 @@ class RoomController(
     fun close(
         @CurrentUser principal: UserPrincipal,
         @PathVariable roomId: Long,
-    ): RoomResponse = RoomResponse.from(roomService.close(roomId, principal.userId))
+    ): RoomResponse = roomQueryService.toResponse(roomService.close(roomId, principal.userId))
 
     @Operation(summary = "방 QR 코드 조회", description = "입장 링크를 담은 PNG. 호스트만 받을 수 있다.")
     @GetMapping("/{roomId}/qr", produces = [MediaType.IMAGE_PNG_VALUE])

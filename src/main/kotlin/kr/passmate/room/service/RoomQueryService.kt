@@ -5,8 +5,11 @@ import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.common.security.AuthPrincipal
 import kr.passmate.common.util.QrCodeGenerator
+import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.room.domain.Room
+import kr.passmate.room.dto.RoomResponse
 import kr.passmate.room.repository.RoomRepository
+import kr.passmate.user.service.UserQueryService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -17,7 +20,26 @@ class RoomQueryService(
     private val participantQueryService: ParticipantQueryService,
     private val qrCodeGenerator: QrCodeGenerator,
     private val clientProperties: ClientProperties,
+    private val userQueryService: UserQueryService,
+    private val questionSetQueryService: QuestionSetQueryService,
 ) {
+
+    /**
+     * 방 상세 응답. 호스트 닉네임과 연결 세트 요약(문항 수·소요시간·문항당 제한)을 붙인다 —
+     * 대기실이 세트 목록·상세를 따로 읽지 않게(웹 버그 리포트 B-21). 세트 내용(문항·정답)은 싣지 않는다.
+     */
+    fun toResponse(room: Room): RoomResponse {
+        val nickname = userQueryService.getNicknames(listOf(room.hostUserId))[room.hostUserId]
+        val stats = room.questionSetId?.let { questionSetQueryService.findStats(it) }
+        return RoomResponse.of(
+            room = room,
+            hostNickname = nickname,
+            questionCount = stats?.questionCount,
+            estimatedSeconds = stats?.estimatedSeconds,
+            minTimeLimitSec = stats?.minTimeLimitSec,
+            maxTimeLimitSec = stats?.maxTimeLimitSec,
+        )
+    }
 
     /**
      * 아직 안 끝난 방(대기·진행)이 이 문제 세트를 쓰고 있는지.
