@@ -1,6 +1,7 @@
 package kr.passmate.report.service
 
 import kr.passmate.question.domain.Question
+import kr.passmate.report.dto.TopicAccuracy
 import kr.passmate.room.domain.Participant
 import kr.passmate.room.domain.Room
 import kr.passmate.room.service.ParticipantQueryService
@@ -61,6 +62,17 @@ class SessionMaterials(
 
     fun correctCountOf(participantId: Long): Int = answersOf(participantId).count { it.isCorrect == true }
 
+    /** 문항 수 기준 정답률(%). 미제출도 오답으로 센다 — participant_report.accuracy 와 같은 정의 */
+    fun accuracyOf(participantId: Long): Double = percent(correctCountOf(participantId), sessionQuestions.size)
+
+    /** "반 평균과 비교" 카드의 반 평균. 한 문제도 안 푼 사람도 0% 로 평균에 든다 */
+    val classAvgAccuracy: Double
+        get() = if (participants.isEmpty()) 0.0 else participants.map { accuracyOf(it.id) }.average()
+
+    /** "반 평균과 비교" 카드의 1위 정답률 */
+    val topAccuracy: Double
+        get() = participants.maxOfOrNull { accuracyOf(it.id) } ?: 0.0
+
     /** 문항의 반 정답률(%). 채점된(정오가 있는) 답안이 분모 — 방 리포트 문항별 탭과 같은 정의 */
     fun correctRateOf(sessionQuestionId: Long): Double {
         val graded = answersBySessionQuestion[sessionQuestionId].orEmpty().filter { it.isCorrect != null }
@@ -76,6 +88,24 @@ class SessionMaterials(
     /** 제출한 문항의 소요 시간 합. 아무것도 안 냈으면 null — 0ms 와 "안 풀었다"는 다르다 */
     fun elapsedMsOf(participantId: Long): Long? =
         answersOf(participantId).mapNotNull { elapsedMsOf(it) }.takeIf { it.isNotEmpty() }?.sum()
+
+    /**
+     * 주제별 맞은 수/전체 수 — "개념별 정답률" 카드. 미제출은 오답이다.
+     * 주제가 비어 있는 문항은 어느 주제에도 넣지 않는다. 순서는 문항 순서대로 처음 나온 주제 순.
+     */
+    fun topicAccuracyOf(participantId: Long): List<TopicAccuracy> {
+        val mine = answersOf(participantId).associateBy { it.sessionQuestionId }
+        return sessionQuestions
+            .mapNotNull { sq ->
+                val topic = questionsById[sq.questionId]?.topic?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                topic to (mine[sq.id]?.isCorrect == true)
+            }
+            .groupBy({ it.first }, { it.second })
+            .map { (topic, results) ->
+                val correct = results.count { it }
+                TopicAccuracy(topic, correct, results.size, percent(correct, results.size))
+            }
+    }
 
     /**
      * 이 참가자가 못 맞힌 문항의 주제. **채점 전인 서술형은 빼고** 오답·미제출만 센다 —
