@@ -20,6 +20,20 @@ data class AiGenerationRequest(
     val avoid: List<String> = emptyList(),
 ) {
     val totalCount: Int get() = counts.values.sum()
+
+    /** 요청에 실제로 든 유형(개수 0 은 제외). 스키마의 type enum 을 이 목록으로 좁힌다. */
+    val types: Set<QuestionType> get() = counts.filterValues { it > 0 }.keys
+
+    /**
+     * 유형별로 한 요청씩 쪼갠다.
+     *
+     * 한 호출에 유형을 섞어 시키면 모델이 분포를 지키지 않는다(객관식 5·서술형 3 → 4·4) —
+     * 분포는 프롬프트 문장에만 실리고 스키마가 강제하지 못하기 때문이다(웹 버그 리포트 B-23).
+     * 유형 하나짜리 호출은 스키마가 유형을 못 박으므로 개수만 맞으면 된다.
+     * 순서는 요청 순서 그대로라 세트에 붙는 순서도 화면이 보여 준 구성과 같다.
+     */
+    fun splitByType(): List<AiGenerationRequest> =
+        counts.filterValues { it > 0 }.map { (type, count) -> copy(counts = mapOf(type to count)) }
 }
 
 /**
