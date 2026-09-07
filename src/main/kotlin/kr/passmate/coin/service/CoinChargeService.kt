@@ -95,6 +95,7 @@ class CoinChargeService(
             chargeId = charge.id,
             status = charge.status,
             amount = charge.amount,
+            method = charge.method,
             balanceAfter = entry?.balanceAfter ?: coinWalletService.getBalance(userId),
             paidAt = charge.paidAt,
             entryPayment = entry,
@@ -122,7 +123,7 @@ class CoinChargeService(
             throw BusinessException(ErrorCode.PAYMENT_AMOUNT_MISMATCH)
         }
 
-        val first = charge.markPaid(payment.pgTxId ?: payment.paymentId, now)
+        val first = charge.markPaid(payment.pgTxId ?: payment.paymentId, now, payment.method)
         if (first) {
             coinService.charge(
                 userId = charge.userId,

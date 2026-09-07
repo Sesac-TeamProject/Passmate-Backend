@@ -50,9 +50,7 @@ class CoinCharge private constructor(
     @Column(name = "amount", nullable = false, updatable = false)
     val amount: Int,
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "method", length = 30)
-    val method: PaymentMethod?,
+    method: PaymentMethod?,
 
     /** 우리가 발급한 주문 ID. 포트원 V2 의 `paymentId` 로 나간다 */
     @Column(name = "merchant_uid", nullable = false, updatable = false, length = 64)
@@ -63,6 +61,15 @@ class CoinCharge private constructor(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
     var id: Long = 0
+        protected set
+
+    /**
+     * 결제 수단. 요청 값은 참고일 뿐이고, **확정될 때 포트원 조회의 실제 수단으로 덮어쓴다** —
+     * 결제창 안에서 다른 수단을 골라도 기록이 사실과 어긋나지 않게 하기 위해서다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "method", length = 30)
+    var method: PaymentMethod? = method
         protected set
 
     @Column(name = "pg_provider", nullable = false, length = 20)
@@ -97,9 +104,15 @@ class CoinCharge private constructor(
      *   아무것도 바꾸지 않는다 — 확정 시각을 나중 호출로 덮으면 영수증이 흔들린다.
      *   코인을 넣는 쪽은 이 값이 true 일 때만 움직여야 한다.
      */
-    fun markPaid(pgPaymentId: String, at: LocalDateTime = LocalDateTime.now()): Boolean {
+    fun markPaid(
+        pgPaymentId: String,
+        at: LocalDateTime = LocalDateTime.now(),
+        method: PaymentMethod? = null,
+    ): Boolean {
         if (status == CoinChargeStatus.PAID) return false
         this.pgPaymentId = pgPaymentId
+        // 포트원이 수단을 안 줬으면 요청 때 값을 그대로 둔다 — null 로 지우지 않는다
+        if (method != null) this.method = method
         this.status = CoinChargeStatus.PAID
         this.paidAt = at
         return true

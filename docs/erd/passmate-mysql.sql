@@ -421,7 +421,7 @@ CREATE TABLE coin_charge (
   user_id BIGINT NOT NULL,
   room_id BIGINT NULL COMMENT '충전 직후 참가비 차감할 방(선택)',
   amount INT NOT NULL COMMENT '충전 코인 = 결제 원화',
-  method VARCHAR(30) NULL COMMENT 'KAKAOPAY/NAVERPAY/TOSSPAY/CARD/BANK_TRANSFER',
+  method VARCHAR(30) NULL COMMENT 'KAKAOPAY/NAVERPAY/TOSSPAY/CARD/BANK_TRANSFER · 확정 시 포트원 조회의 실제 수단으로 기록',
   pg_provider VARCHAR(20) NOT NULL DEFAULT 'PORTONE',
   merchant_uid VARCHAR(64) NOT NULL COMMENT '우리가 발급한 주문 ID(paymentId)',
   pg_payment_id VARCHAR(100) NULL COMMENT '포트원 결제 ID(imp_uid)',

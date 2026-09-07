@@ -16,7 +16,7 @@ data class CoinChargeRequest(
     @field:Positive(message = "충전 금액은 0보다 커야 합니다.")
     @field:Schema(description = "충전할 코인. 1 C = ₩1")
     val amount: Int?,
-    @field:Schema(description = "결제 수단. 비우면 기본 결제 수단을 쓴다")
+    @field:Schema(description = "결제 수단(선택·참고값). 실제 기록은 확정 시 포트원 조회의 수단으로 덮어쓴다")
     val method: PaymentMethod? = null,
     @field:Schema(description = "충전 직후 참가비를 차감할 방(선택). 있으면 확정 시 원스텝 처리")
     val roomId: Long? = null,
@@ -60,6 +60,8 @@ data class CoinChargeConfirmResponse(
     val status: CoinChargeStatus,
     @field:Schema(description = "충전된 코인")
     val amount: Int,
+    @field:Schema(description = "실제 결제 수단 — 포트원 조회값. 결제창 안에서 고른 수단이다")
+    val method: PaymentMethod? = null,
     @field:Schema(description = "충전(및 참가비 차감) 후 잔액")
     val balanceAfter: Int,
     val paidAt: LocalDateTime?,
