@@ -20,6 +20,9 @@ data class AiGenerationRequest(
     val avoid: List<String> = emptyList(),
 ) {
     val totalCount: Int get() = counts.values.sum()
+
+    /** 요청에 실제로 든 유형(개수 0 은 제외). 스키마의 type enum 을 이 목록으로 좁힌다. */
+    val types: Set<QuestionType> get() = counts.filterValues { it > 0 }.keys
 }
 
 /**
