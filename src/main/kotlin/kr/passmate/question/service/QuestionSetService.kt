@@ -68,7 +68,7 @@ class QuestionSetService(
                 explanation = request.explanation,
                 topic = request.topic,
                 difficulty = request.difficulty,
-                timeLimitSec = request.timeLimitSec,
+                timeLimitSec = request.timeLimitSecOrDefault,
                 points = request.points,
                 source = QuestionSource.MANUAL,
             ),
@@ -89,7 +89,8 @@ class QuestionSetService(
         ownerUserId: Long,
         generated: List<GeneratedQuestion>,
         topic: String,
-        timeLimitSec: Int,
+        /** null 이면 문항 유형별 기본값 — 서술형만 90초가 된다 */
+        timeLimitSec: Int?,
         points: Int,
     ): List<Question> {
         val set = getEditableSet(setId, ownerUserId)
@@ -107,7 +108,7 @@ class QuestionSetService(
                     explanation = it.explanation,
                     topic = topic,
                     difficulty = it.difficulty,
-                    timeLimitSec = timeLimitSec,
+                    timeLimitSec = timeLimitSec ?: it.type.defaultTimeLimitSec,
                     points = points,
                     source = QuestionSource.AI,
                 ),
@@ -156,7 +157,7 @@ class QuestionSetService(
             explanation = request.explanation,
             topic = request.topic,
             difficulty = request.difficulty,
-            timeLimitSec = request.timeLimitSec,
+            timeLimitSec = request.timeLimitSecOrDefault,
             points = request.points,
         )
         refreshStats(set)

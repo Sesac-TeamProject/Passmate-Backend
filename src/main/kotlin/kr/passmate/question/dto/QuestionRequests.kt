@@ -62,14 +62,16 @@ data class QuestionRequest(
 
     val difficulty: Difficulty? = null,
 
-    @field:Schema(description = "제한시간(초). 5~600")
-    val timeLimitSec: Int = DEFAULT_TIME_LIMIT_SEC,
+    @field:Schema(description = "제한시간(초). 5~600. 생략하면 유형별 기본 — 객관식·OX 30초, 서술형 90초")
+    val timeLimitSec: Int? = null,
 
     @field:Schema(description = "배점. 1~1000")
     val points: Int = DEFAULT_POINTS,
 ) {
+    /** 생략했으면 유형별 기본값(W-02b "서술형은 기본 90초"). */
+    val timeLimitSecOrDefault: Int get() = timeLimitSec ?: type.defaultTimeLimitSec
+
     companion object {
-        const val DEFAULT_TIME_LIMIT_SEC = 30
         const val DEFAULT_POINTS = 100
     }
 }
