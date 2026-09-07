@@ -64,6 +64,24 @@ class GeneratedQuestionTest {
     }
 
     @Test
+    fun `서술형 문항 지문과 모범답안이 같으면 재시도 대상이다`() {
+        // 모델이 모범답안을 지문에도 그대로 써 보낸 실제 사례(2026-09-08, 세트 6). 학생에게 답을 보여주는 셈이다
+        val text = "힙 자료구조는 이진 트리의 특성을 가지며, 각 부모 노드는 자식 노드들보다 크거나 작아야 한다."
+
+        assertThatThrownBy { essay(content = text, answer = "  $text \n").verifyConsistent() }
+            .isInstanceOf(AiCallException::class.java)
+            .satisfies({ assertThat((it as AiCallException).retryable).isTrue() })
+    }
+
+    @Test
+    fun `서술형 지문이 질문이고 모범답안이 다르면 통과한다`() {
+        assertThatCode {
+            essay(content = "힙에 값을 추가하는 과정을 설명하시오.", answer = "마지막 위치에 삽입한 뒤 부모와 비교해 위로 올린다.")
+                .verifyConsistent()
+        }.doesNotThrowAnyException()
+    }
+
+    @Test
     fun `지문이 비면 거부한다`() {
         assertThatThrownBy { ox("O", content = " ").verifyConsistent() }
             .isInstanceOf(AiCallException::class.java)
@@ -74,6 +92,15 @@ class GeneratedQuestionTest {
         assertThatCode { mcq(listOf("가", "나", "다", "라"), "나").verifyConsistent() }
             .doesNotThrowAnyException()
     }
+
+    private fun essay(content: String, answer: String) = GeneratedQuestion(
+        type = QuestionType.ESSAY,
+        content = content,
+        choices = null,
+        answer = answer,
+        explanation = null,
+        difficulty = Difficulty.NORMAL,
+    )
 
     private fun mcq(choices: List<String>, answer: String) = GeneratedQuestion(
         type = QuestionType.MCQ,
