@@ -1,5 +1,6 @@
 package kr.passmate.coin.client
 
+import kr.passmate.coin.domain.PaymentMethod
 import java.time.LocalDateTime
 
 /**
@@ -14,6 +15,8 @@ data class PortOnePayment(
     val totalAmount: Int,
     /** PG 사의 거래 ID. 대사(對査)용으로 남겨 둔다 */
     val pgTxId: String? = null,
+    /** 실제로 쓰인 결제 수단. 포트원이 모르는 유형을 주면 null — 확정을 막을 이유는 아니다 */
+    val method: PaymentMethod? = null,
     val paidAt: LocalDateTime? = null,
 ) {
     /** 코인을 넣어도 되는 상태인지. 이것만으로는 부족하고 금액 대조가 함께 필요하다 */

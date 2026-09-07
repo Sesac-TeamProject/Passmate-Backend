@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import kr.passmate.coin.client.PortOneClient
 import kr.passmate.coin.client.PortOnePaymentStatus
+import kr.passmate.coin.domain.PaymentMethod
 import kr.passmate.common.security.JwtTokenProvider
 import kr.passmate.hostlevel.domain.HostProfile
 import kr.passmate.hostlevel.repository.HostProfileRepository
@@ -117,6 +118,17 @@ class CoinChargeIntegrationTest : IntegrationTestSupport() {
         confirm(chargeId).andExpect(status().isOk).andExpect(jsonPath("$.status").value("PAID"))
 
         assertThat(balance()).isEqualTo(10_000)
+    }
+
+    @Test
+    fun `확정 응답과 기록에는 포트원이 말한 실제 수단이 실린다`() {
+        // 화면은 수단을 고르지 않는다 — 결제창 안에서 고른 수단을 포트원 조회로 알아낸다
+        val (chargeId, paymentId) = requested(10_000)
+        fake.stub(paymentId, PortOnePaymentStatus.PAID, totalAmount = 10_000, method = PaymentMethod.KAKAOPAY)
+
+        confirm(chargeId)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.method").value("KAKAOPAY"))
     }
 
     @Test

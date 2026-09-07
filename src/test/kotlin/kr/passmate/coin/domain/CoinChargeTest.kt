@@ -39,6 +39,35 @@ class CoinChargeTest {
     }
 
     @Test
+    fun `확정할 때 포트원이 말한 실제 수단으로 기록을 덮어쓴다`() {
+        // 결제창 안에서 요청과 다른 수단을 골라도 기록은 사실을 따라간다
+        val charge = charge()
+
+        charge.markPaid("payment-abc", now, PaymentMethod.KAKAOPAY)
+
+        assertThat(charge.method).isEqualTo(PaymentMethod.KAKAOPAY)
+    }
+
+    @Test
+    fun `포트원이 수단을 주지 않으면 기존 기록을 지우지 않는다`() {
+        val charge = charge() // 픽스처는 CARD 로 만든다
+
+        charge.markPaid("payment-abc", now, method = null)
+
+        assertThat(charge.method).isEqualTo(PaymentMethod.CARD)
+    }
+
+    @Test
+    fun `이미 확정된 건의 수단은 나중 호출이 덮어쓰지 못한다`() {
+        val charge = charge()
+        charge.markPaid("payment-abc", now, PaymentMethod.CARD)
+
+        charge.markPaid("payment-abc", now.plusMinutes(1), PaymentMethod.TOSSPAY)
+
+        assertThat(charge.method).isEqualTo(PaymentMethod.CARD)
+    }
+
+    @Test
     fun `이미 확정된 건을 다시 확정하면 false 를 준다`() {
         val charge = charge()
         charge.markPaid("payment-abc", now)
