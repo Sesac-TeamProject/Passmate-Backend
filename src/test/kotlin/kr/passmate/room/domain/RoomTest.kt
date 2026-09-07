@@ -104,6 +104,19 @@ class RoomTest {
     }
 
     @Test
+    fun `자동 넘김은 켠 문항만 참이고 세트를 바꾸면 함께 비워진다`() {
+        val room = room(questionSetId = 10L)
+        room.overrideQuestionTimes(mapOf(1L to 20), autoAdvance = listOf(1L, 3L))
+
+        assertThat(room.isAutoAdvance(1L)).isTrue()
+        assertThat(room.isAutoAdvance(2L)).isFalse()
+
+        room.update("제목", null, null, 11L, null, false, null)
+        assertThat(room.questionAutoAdvance).isNull()
+        assertThat(room.isAutoAdvance(1L)).isFalse()
+    }
+
+    @Test
     fun `문항별 시간은 대기 중일 때만 덮어쓸 수 있다`() {
         val room = room().apply { start() }
 
