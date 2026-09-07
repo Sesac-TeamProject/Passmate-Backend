@@ -87,7 +87,10 @@ class RoomService(
             throw BusinessException(ErrorCode.INVALID_INPUT, "이 방의 세트에 없는 문항입니다: $unknown")
         }
 
-        room.overrideQuestionTimes(request.times.associate { it.questionId to it.timeLimitSec })
+        room.overrideQuestionTimes(
+            times = request.times.associate { it.questionId to it.timeLimitSec },
+            autoAdvance = request.times.filter { it.autoAdvance }.map { it.questionId },
+        )
         return room
     }
 

@@ -117,6 +117,24 @@ class RoomQuestionTimeIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `자동 넘김 토글이 저장되고 빠진 문항은 꺼진다`() {
+        // W-02b 의 "자동 넘김" 열 — 시간과 같은 화면에서 함께 저장된다(2026-09-07 결정)
+        putTimes(hostToken, """{"times":[{"questionId":$mcqId,"timeLimitSec":20,"autoAdvance":true},{"questionId":$essayId,"timeLimitSec":90}]}""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.questions[0].autoAdvance").value(true))
+            .andExpect(jsonPath("$.questions[1].autoAdvance").value(false))
+
+        // 전체 교체 — 본문에서 빠지면 자동 넘김도 꺼진다
+        putTimes(hostToken, """{"times":[{"questionId":$essayId,"timeLimitSec":90,"autoAdvance":true}]}""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.questions[0].autoAdvance").value(false))
+            .andExpect(jsonPath("$.questions[1].autoAdvance").value(true))
+
+        getTimes(hostToken)
+            .andExpect(jsonPath("$.questions[1].autoAdvance").value(true))
+    }
+
+    @Test
     fun `빈 목록을 보내면 세트 기본값으로 돌아간다`() {
         putTimes(hostToken, """{"times":[{"questionId":$mcqId,"timeLimitSec":20},{"questionId":$essayId,"timeLimitSec":90}]}""")
             .andExpect(status().isOk)

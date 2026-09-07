@@ -66,6 +66,7 @@ class RoomQueryService(
                 defaultTimeLimitSec = question.timeLimitSec,
                 timeLimitSec = room.timeLimitSecOf(question.id, question.timeLimitSec),
                 overridden = room.hasTimeOverride(question.id),
+                autoAdvance = room.isAutoAdvance(question.id),
             )
         }
         return RoomQuestionTimesResponse(
