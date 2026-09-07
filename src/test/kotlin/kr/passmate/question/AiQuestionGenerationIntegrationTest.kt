@@ -53,8 +53,12 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var openAiClient: OpenAiClient
     @Autowired private lateinit var logRepository: AiGenerationLogRepository
     @Autowired private lateinit var policy: PolicyProperties
+    @Autowired private lateinit var questionSetService: kr.passmate.question.service.QuestionSetService
 
     private val fake: FakeOpenAiClient get() = openAiClient as FakeOpenAiClient
+
+    /** 값이 있으면 AI 호출이 끝난 직후 그 세트를 확정한다 — 호출과 저장 사이에 끼어드는 상황 재현 */
+    private var confirmAfterGeneration: Long? = null
 
     private lateinit var ownerToken: String
     private lateinit var otherToken: String
@@ -63,6 +67,8 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     @BeforeEach
     fun setUp() {
         fake.reset()
+        confirmAfterGeneration = null
+        fake.onCall = { confirmAfterGeneration?.let { questionSetService.confirm(it, ownerUserId) } }
         val owner = register("ai-owner")
         ownerUserId = owner.first
         ownerToken = owner.second
@@ -126,6 +132,25 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
         quota(ownerToken)
             .andExpect(jsonPath("$.usedCount").value(policy.aiFreeLimit))
             .andExpect(jsonPath("$.remainingCount").value(0))
+    }
+
+    @Test
+    fun `생성은 됐지만 저장에 실패하면 무료 횟수가 깎이지 않는다`() {
+        val setId = createSet()
+        // AI 호출과 저장은 트랜잭션이 다르다. 그 사이 세트가 확정되면 저장이 409 로 떨어진다 —
+        // 문항은 못 받았는데 무료 횟수만 깎이면 안 된다
+        addManualQuestion(setId, """{"type":"OX","content":"먼저 쓴 문항","answer":"O"}""")
+        confirmAfterGeneration = setId
+
+        generate(setId, """{"topic":"주제","counts":{"OX":1}}""")
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("QUESTION_SET_ALREADY_CONFIRMED"))
+
+        // 호출은 실제로 나갔지만 기록은 무효로 돌아간다
+        assertThat(fake.callCount).isEqualTo(1)
+        assertThat(successCount()).isZero()
+        assertThat(logRepository.findAll().single().status).isEqualTo(AiGenerationStatus.FAILED)
+        quota(ownerToken).andExpect(jsonPath("$.remainingCount").value(policy.aiFreeLimit))
     }
 
     @Test

@@ -37,15 +37,12 @@ class AiGenerationLog(
     @Column(name = "params")
     val params: Map<String, Any?>? = null,
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    val status: AiGenerationStatus,
+    status: AiGenerationStatus,
 
     @Column(name = "retry_count", nullable = false)
     val retryCount: Int = 0,
 
-    @Column(name = "error_message", length = ERROR_MESSAGE_MAX)
-    val errorMessage: String? = null,
+    errorMessage: String? = null,
 
     @Column(name = "model", length = 50)
     val model: String? = null,
@@ -59,6 +56,27 @@ class AiGenerationLog(
     @Column(name = "id")
     var id: Long = 0
         protected set
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    var status: AiGenerationStatus = status
+        protected set
+
+    @Column(name = "error_message", length = ERROR_MESSAGE_MAX)
+    var errorMessage: String? = errorMessage
+        protected set
+
+    /**
+     * 호출은 성공했지만 **결과를 쓰지 못한** 경우 이 기록을 무효로 돌린다.
+     *
+     * AI 호출과 문항 저장은 트랜잭션이 다르다(호출이 수십 초라 커넥션을 쥘 수 없다).
+     * 그 사이 세트가 확정·삭제되면 저장이 409·404 로 떨어지는데, 그때 성공 기록이 남아 있으면
+     * **문항은 못 받고 무료 횟수만 깎인다.** 한도 집계는 SUCCESS 만 세므로 FAILED 로 되돌리면 복구된다.
+     */
+    fun void(reason: String) {
+        status = AiGenerationStatus.FAILED
+        errorMessage = truncate(reason)
+    }
 
     companion object {
         const val ERROR_MESSAGE_MAX = 500
