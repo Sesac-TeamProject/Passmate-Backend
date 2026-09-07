@@ -4,7 +4,6 @@ import kr.passmate.session.repository.SessionQuestionRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 
 /**
@@ -25,8 +24,13 @@ class QuestionTimeoutScheduler(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * **트랜잭션을 열지 않는다.** 여기서 `@Transactional(readOnly = true)` 로 감싸면
+     * [SessionService.endByTimeout](REQUIRED)이 그 읽기 전용 트랜잭션에 합류해 `endedAt` 변경이 flush 되지 않고,
+     * 다음 틱에 같은 문항을 또 찾아 QUESTION_ENDED 를 매초 다시 발행한다(웹 QA_BACKLOG B-12).
+     * 열지 않으면 마감 한 건이 각자 쓰기 트랜잭션에서 끝나 커밋되고, 한 건이 실패해도 나머지가 함께 죽지 않는다.
+     */
     @Scheduled(fixedDelay = POLL_INTERVAL_MS)
-    @Transactional(readOnly = true)
     fun closeExpiredQuestions() {
         val expired = sessionQuestionRepository.findAllByEndedAtIsNullAndEndsAtLessThan(LocalDateTime.now())
         expired.forEach { sq ->

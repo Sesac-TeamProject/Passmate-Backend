@@ -93,6 +93,90 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `남은 무료 생성 횟수를 조회한다 — 화면이 한도를 복제하지 않게`() {
+        // 프론트가 AI_FREE_LIMIT = 5 를 화면에 박아 두고 있어, 정책값이 바뀌면 조용히 거짓말이 된다(웹 QA_BACKLOG B-7)
+        quota(ownerToken)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.freeLimit").value(policy.aiFreeLimit))
+            .andExpect(jsonPath("$.usedCount").value(0))
+            .andExpect(jsonPath("$.remainingCount").value(policy.aiFreeLimit))
+
+        val setId = createSet()
+        generate(setId, """{"topic":"주제","counts":{"OX":1}}""").andExpect(status().isCreated)
+
+        quota(ownerToken)
+            .andExpect(jsonPath("$.usedCount").value(1))
+            .andExpect(jsonPath("$.remainingCount").value(policy.aiFreeLimit - 1))
+    }
+
+    @Test
+    fun `실패한 생성은 남은 횟수를 깎지 않고 소진되면 0 이다`() {
+        val setId = createSet()
+        fake.failTimes(2)
+        generate(setId, """{"topic":"주제","counts":{"OX":1}}""").andExpect(status().isBadGateway)
+
+        quota(ownerToken).andExpect(jsonPath("$.remainingCount").value(policy.aiFreeLimit))
+
+        fake.reset()
+        repeat(policy.aiFreeLimit) {
+            generate(setId, """{"topic":"주제 $it","counts":{"OX":1}}""").andExpect(status().isCreated)
+        }
+
+        // 한도를 넘겨도 음수로 내려가지 않는다 — 화면이 "-1회 남음"을 그리지 않게
+        quota(ownerToken)
+            .andExpect(jsonPath("$.usedCount").value(policy.aiFreeLimit))
+            .andExpect(jsonPath("$.remainingCount").value(0))
+    }
+
+    @Test
+    fun `잔여 횟수는 회원만 조회한다`() {
+        mockMvc.perform(get("/users/me/ai-quota")).andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `유형이 섞인 요청은 유형별로 나눠 호출하고 무료 횟수는 한 번만 센다`() {
+        val setId = createSet()
+
+        // 웹 에디터 기본값(객관식 5 · 서술형 3). 한 호출에 섞어 시키면 모델이 분포를 안 지켜 502 였다(웹 버그 리포트 B-23)
+        generate(setId, """{"topic":"야구","counts":{"MCQ":5,"ESSAY":3}}""")
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.length()").value(8))
+            .andExpect(jsonPath("$[0].type").value("MCQ"))
+            .andExpect(jsonPath("$[4].type").value("MCQ"))
+            .andExpect(jsonPath("$[5].type").value("ESSAY"))
+
+        // 유형마다 한 번씩, 각 호출은 유형 하나만 담는다
+        assertThat(fake.callCount).isEqualTo(2)
+        assertThat(fake.requests[0].counts).isEqualTo(mapOf(QuestionType.MCQ to 5))
+        assertThat(fake.requests[1].counts).isEqualTo(mapOf(QuestionType.ESSAY to 3))
+        // 앞 유형에서 만든 문항은 뒤 호출의 "피할 목록"에 들어간다
+        assertThat(fake.requests[1].avoid).contains("야구 객관식 1")
+
+        // 사용자 액션은 하나 — 로그도 한 줄, 무료 횟수도 1회
+        assertThat(successCount()).isEqualTo(1)
+        val log = logRepository.findAll().single()
+        assertThat(log.status).isEqualTo(AiGenerationStatus.SUCCESS)
+        assertThat(log.params!!["counts"]).isEqualTo(mapOf("MCQ" to 5, "ESSAY" to 3))
+    }
+
+    @Test
+    fun `뒤 유형 호출이 끝내 실패하면 502 이고 앞 유형 문항도 저장하지 않는다`() {
+        val setId = createSet()
+        // 1번(MCQ) 성공 → 2번(ESSAY) 실패 → 3번(ESSAY 재시도) 실패
+        fake.failOnCalls(2, 3)
+
+        generate(setId, """{"topic":"야구","counts":{"MCQ":2,"ESSAY":1}}""")
+            .andExpect(status().isBadGateway)
+            .andExpect(jsonPath("$.code").value("AI_GENERATION_FAILED"))
+
+        assertThat(fake.callCount).isEqualTo(3)
+        // 절반만 붙이면 "객관식 2 · 서술형 1"을 약속한 화면과 어긋난다 — 전부 버린다
+        assertThat(questionsOf(setId)).isEmpty()
+        assertThat(successCount()).isZero()
+        assertThat(logRepository.findAll().single().status).isEqualTo(AiGenerationStatus.FAILED)
+    }
+
+    @Test
     fun `형식 오류는 한 번 재시도하고 성공하면 정상 응답한다`() {
         val setId = createSet()
         fake.failTimes(1)
@@ -287,6 +371,9 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
                 .header("Authorization", "Bearer $ownerToken")
                 .contentType(MediaType.APPLICATION_JSON).content(body),
         )
+
+    private fun quota(token: String): ResultActions =
+        mockMvc.perform(get("/users/me/ai-quota").header("Authorization", "Bearer $token"))
 
     private fun questionsOf(setId: Long): List<JsonNode> =
         mockMvc.perform(get("/question-sets/{id}", setId).header("Authorization", "Bearer $ownerToken"))

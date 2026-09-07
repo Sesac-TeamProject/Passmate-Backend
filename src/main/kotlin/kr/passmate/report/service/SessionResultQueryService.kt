@@ -59,7 +59,7 @@ class SessionResultQueryService(
                 points = question.points,
                 submitCount = answers.size,
                 correctCount = correct,
-                correctRate = percent(correct, graded.size),
+                correctRate = SessionMaterials.percent(correct, graded.size),
                 aiAnalysisCount = answers.count { analyzedByAnswer[it.id]?.analysis != null },
             )
         }
@@ -74,7 +74,7 @@ class SessionResultQueryService(
             summary = ResultSummary(
                 participantCount = m.participants.size,
                 questionCount = m.sessionQuestions.size,
-                avgCorrectRate = percent(gradedAll.count { it.isCorrect == true }, gradedAll.size),
+                avgCorrectRate = SessionMaterials.percent(gradedAll.count { it.isCorrect == true }, gradedAll.size),
                 // 한 문제도 안 푼 사람도 분모에 넣는다 — 참여율이 낮으면 평균도 낮게 보여야 한다
                 avgScore = if (m.participants.isEmpty()) 0.0
                 else m.participants.sumOf { m.scoreOf(it.id) }.toDouble() / m.participants.size,
@@ -117,6 +117,8 @@ class SessionResultQueryService(
             correctCount = answers.count { it.isCorrect == true },
             submitCount = answers.size,
             questionCount = m.sessionQuestions.size,
+            participantCount = m.participants.size,
+            elapsedMs = m.elapsedMsOf(participantId),
             questions = answerViews(m, answers),
             rating = roomRatingQueryService.availability(room, participantId, hasSubmitted = answers.isNotEmpty()),
         )
@@ -140,6 +142,8 @@ class SessionResultQueryService(
             correctCount = answers.count { it.isCorrect == true },
             submitCount = answers.size,
             questionCount = m.sessionQuestions.size,
+            participantCount = m.participants.size,
+            elapsedMs = m.elapsedMsOf(participantId),
             questions = answerViews(m, answers),
         )
     }
@@ -163,20 +167,20 @@ class SessionResultQueryService(
                 type = question.type,
                 content = question.content,
                 points = question.points,
-                // 마감 전에는 정답·해설을 내보내지 않는다 (QUESTION_STARTED 와 같은 원칙)
+                topic = question.topic,
+                // 마감 전에는 정답·해설·반 정답률을 내보내지 않는다 (QUESTION_STARTED 와 같은 원칙)
                 answer = question.answer.takeIf { sq.isEnded },
                 explanation = question.explanation?.takeIf { sq.isEnded },
                 submitted = answer?.submitted,
                 isCorrect = answer?.isCorrect,
                 score = answer?.score ?: 0,
                 finalScore = answer?.finalScore ?: 0,
+                correctRate = m.correctRateOf(sq.id).takeIf { sq.isEnded },
+                elapsedMs = answer?.let { m.elapsedMsOf(it) },
                 analysisStatus = feedback.analysisStatus,
                 analysis = feedback.analysis,
                 teacherReview = feedback.teacherReview,
             )
         }
     }
-
-    private fun percent(part: Int, whole: Int): Double =
-        if (whole == 0) 0.0 else part * 100.0 / whole
 }

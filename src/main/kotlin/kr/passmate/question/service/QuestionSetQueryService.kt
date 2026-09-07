@@ -12,6 +12,16 @@ import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
+/**
+ * 세트 요약 — 방 상세가 "문항 수·예상 소요시간·문항당 제한"을 채울 때 쓴다. 세트 내용(지문·정답)은 주지 않는다.
+ * 시간은 문항별로 준다 — 방이 문항 단위로 덮어쓴 값(room.question_time_overrides)을 얹어 계산해야 하므로.
+ */
+data class QuestionSetStats(
+    val questionCount: Int,
+    /** questionId → 세트에 적힌 제한시간(초) */
+    val timeLimitSecByQuestionId: Map<Long, Int>,
+)
+
 @Service
 @Transactional(readOnly = true)
 class QuestionSetQueryService(
@@ -45,6 +55,19 @@ class QuestionSetQueryService(
     fun getQuestionCounts(setIds: Collection<Long>): Map<Long, Int> {
         if (setIds.isEmpty()) return emptyMap()
         return questionSetRepository.findAllById(setIds.toSet()).associate { it.id to it.questionCount }
+    }
+
+    /**
+     * 방 상세용 세트 요약(FR-004 방 정보 "문항 수·예상 소요시간", 웹 버그 리포트 B-21).
+     * 삭제된 세트도 돌려준다 — 끝난 방의 출제 근거라 목록에서 감췄다고 방 상세까지 비울 수는 없다.
+     */
+    fun findStats(setId: Long): QuestionSetStats? {
+        val set = questionSetRepository.findById(setId).orElse(null) ?: return null
+        return QuestionSetStats(
+            questionCount = set.questionCount,
+            timeLimitSecByQuestionId = questionRepository.findAllBySetIdOrderByOrderNoAsc(setId)
+                .associate { it.id to it.timeLimitSec },
+        )
     }
 
     /**

@@ -42,10 +42,7 @@ class GuestClaimService(
         // 회원으로도 같은 방에 들어갔었다면 연동할 수 없다 — 한 사람이 한 방에 두 줄로 남으면
         // 결과·랭킹에서 같은 사람이 두 번 세어진다
         if (participantRepository.existsByRoomIdAndUserId(participant.roomId, userId)) {
-            throw BusinessException(
-                ErrorCode.CONFLICT,
-                "이미 회원으로 참여한 방입니다.",
-            )
+            throw BusinessException(ErrorCode.GUEST_RECORD_MEMBER_ALREADY_JOINED)
         }
 
         participant.claim(userId, now)

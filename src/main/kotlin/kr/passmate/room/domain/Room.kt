@@ -100,6 +100,16 @@ class Room(
     var correctRate: java.math.BigDecimal? = null
         protected set
 
+    /**
+     * 이 방에서만 쓰는 문항별 제한시간(questionId → 초). 확정 세트는 불변이라 세트 대신 방이 덮어쓴다
+     * (W-02b 문항별 시간 설정, 웹 버그 리포트 B-18). 세션 시작 시 session_question.time_limit_sec 로 복사된다.
+     * NULL = 전부 세트 기본값.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "question_time_overrides")
+    var questionTimeOverrides: Map<Long, Int>? = null
+        protected set
+
     /** 호스트인지 확인하고, 아니면 403 으로 막는다. */
     fun verifyHost(userId: Long) {
         if (userId != hostUserId) throw BusinessException(ErrorCode.NOT_ROOM_HOST)
@@ -116,6 +126,8 @@ class Room(
         scheduledAt: LocalDateTime?,
     ) {
         verifyWaiting("방 정보는 대기 중일 때만 수정할 수 있습니다.")
+        // 덮어쓴 시간은 예전 세트의 문항 id 를 가리킨다 — 세트가 바뀌면 의미가 없으니 비운다
+        if (questionSetId != this.questionSetId) questionTimeOverrides = null
         this.title = title
         this.description = description
         this.topic = topic
@@ -174,6 +186,22 @@ class Room(
     fun lockScreen(locked: Boolean) {
         screenLocked = locked
     }
+
+    /**
+     * 문항별 시간을 통째로 갈아끼운다(전체 교체 — 빈 맵이면 전부 기본값으로 돌아간다). 대기 중일 때만.
+     * 문항이 세트에 있는지·시간 범위는 Service 가 세트를 읽어 검사한다 — 방은 세트 내용을 모른다.
+     */
+    fun overrideQuestionTimes(times: Map<Long, Int>) {
+        verifyWaiting("문항별 시간은 대기 중일 때만 바꿀 수 있습니다.")
+        questionTimeOverrides = times.takeIf { it.isNotEmpty() }
+    }
+
+    /** 이 방에서 쓸 제한시간. 덮어쓴 값이 없으면 세트에 적힌 기본값이다. */
+    fun timeLimitSecOf(questionId: Long, default: Int): Int =
+        questionTimeOverrides?.get(questionId) ?: default
+
+    fun hasTimeOverride(questionId: Long): Boolean =
+        questionTimeOverrides?.containsKey(questionId) == true
 
     fun increaseParticipantCount() {
         participantCount += 1

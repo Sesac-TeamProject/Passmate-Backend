@@ -53,7 +53,7 @@ class OpenAiHttpClient(
             buildMap {
                 put("model", model)
                 put("messages", listOf(generationSystemMessage(request), generationUserMessage(request)))
-                put("response_format", responseFormat("passmate_questions", GENERATION_SCHEMA))
+                put("response_format", responseFormat("passmate_questions", generationSchema(request.types)))
                 // reasoning_effort 는 추론 모델에서만 받는다. 값이 없으면 아예 보내지 않는다 —
                 // 지원하지 않는 모델에 보내면 400 이 난다
                 properties.reasoningEffort.takeIf { it.isNotBlank() }?.let { put("reasoning_effort", it) }
@@ -249,8 +249,14 @@ class OpenAiHttpClient(
 
         private fun stringArray() = mapOf("type" to "array", "items" to mapOf("type" to "string"))
 
-        /** strict 모드는 모든 속성이 required 이고 additionalProperties=false 여야 한다. */
-        val GENERATION_SCHEMA: Map<String, Any?> = mapOf(
+        /**
+         * 문항 생성 스키마. strict 모드는 모든 속성이 required 이고 additionalProperties=false 여야 한다.
+         *
+         * `type` 의 enum 은 **요청한 유형만** 넣는다. 세 유형을 다 열어 두면 "객관식 8개" 요청에
+         * OX 가 섞여 나오고, 그걸 아래 분포 검증이 걸러 502 가 됐다(웹 버그 리포트 B-23).
+         * 스키마가 유형을 못 박으면 모델이 다른 유형을 낼 방법 자체가 없다.
+         */
+        fun generationSchema(types: Collection<QuestionType>): Map<String, Any?> = mapOf(
             "type" to "object",
             "additionalProperties" to false,
             "required" to listOf("questions"),
@@ -262,7 +268,7 @@ class OpenAiHttpClient(
                         "additionalProperties" to false,
                         "required" to listOf("type", "content", "choices", "answer", "explanation", "difficulty"),
                         "properties" to mapOf(
-                            "type" to mapOf("type" to "string", "enum" to QuestionType.entries.map { it.name }),
+                            "type" to mapOf("type" to "string", "enum" to types.map { it.name }),
                             "content" to mapOf("type" to "string"),
                             "choices" to mapOf(
                                 "type" to listOf("array", "null"),

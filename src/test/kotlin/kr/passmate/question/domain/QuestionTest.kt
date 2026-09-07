@@ -17,6 +17,21 @@ class QuestionTest {
     }
 
     @Test
+    fun `객관식 보기는 4개를 넘을 수 없다`() {
+        assertThatCode {
+            question(type = QuestionType.MCQ, choices = listOf("가", "나", "다", "라"), answer = "가")
+        }.doesNotThrowAnyException()
+
+        // 프론트가 보기 키를 A·B·C·D 로 고정해 5번째부터 정답을 잃는다(웹 QA_BACKLOG B-16)
+        assertThatThrownBy {
+            question(type = QuestionType.MCQ, choices = listOf("가", "나", "다", "라", "마"), answer = "마")
+        }
+            .isInstanceOf(BusinessException::class.java)
+            .extracting { (it as BusinessException).errorCode }
+            .isEqualTo(ErrorCode.INVALID_QUESTION)
+    }
+
+    @Test
     fun `객관식 정답은 보기 중 하나여야 한다`() {
         assertThatThrownBy {
             question(type = QuestionType.MCQ, choices = listOf("가", "나"), answer = "다")

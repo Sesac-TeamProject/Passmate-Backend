@@ -12,6 +12,7 @@ import kr.passmate.room.dto.RoomCreateRequest
 import kr.passmate.room.dto.RoomUpdateRequest
 import kr.passmate.room.service.ParticipantService
 import kr.passmate.room.service.RoomService
+import kr.passmate.session.service.AnswerService
 import kr.passmate.session.service.SessionService
 import kr.passmate.voicehint.service.VoiceHintService
 import kr.passmate.support.FakeStorageConfig
@@ -52,6 +53,8 @@ class SessionBroadcastTest : IntegrationTestSupport() {
     @Autowired private lateinit var participantService: ParticipantService
     @Autowired private lateinit var questionSetService: QuestionSetService
     @Autowired private lateinit var sessionService: SessionService
+    @Autowired private lateinit var answerService: AnswerService
+    @Autowired private lateinit var questionSetQueryService: kr.passmate.question.service.QuestionSetQueryService
     @Autowired private lateinit var voiceHintService: VoiceHintService
     @Autowired private lateinit var jwtTokenProvider: JwtTokenProvider
 
@@ -101,6 +104,60 @@ class SessionBroadcastTest : IntegrationTestSupport() {
         assertThat(endPayload["answer"]).isEqualTo("찾을 수 없음")
         assertThat(endPayload["explanation"]).isEqualTo("Not Found 입니다")
         assertThat(endPayload).containsKey("distribution")
+
+        session.disconnect()
+    }
+
+    @Test
+    fun `두 번째 QUESTION_ENDED 에 정답률 변동이, RANKING_UPDATED 에 순위 변동이 실린다`() {
+        val hostId = userService.loginOrRegister(
+            AuthProvider.GOOGLE, "bc-delta-${System.nanoTime()}", null, "호스트", null,
+        ).user.id
+
+        val set = questionSetService.create(hostId, QuestionSetCreateRequest("변동 테스트"))
+        questionSetService.addQuestion(
+            set.id, hostId,
+            QuestionRequest(QuestionType.MCQ, "1번", listOf("맞음", "틀림"), "맞음", timeLimitSec = 30, points = 100),
+        )
+        questionSetService.addQuestion(
+            set.id, hostId,
+            QuestionRequest(QuestionType.MCQ, "2번", listOf("맞음", "틀림"), "맞음", timeLimitSec = 30, points = 100),
+        )
+        questionSetService.confirm(set.id, hostId)
+
+        val room = roomService.create(hostId, RoomCreateRequest(title = "변동", type = RoomType.FREE))
+        roomService.update(room.id, hostId, RoomUpdateRequest(title = "변동", questionSetId = set.id))
+        val joined = participantService.join(room.id, null, JoinRoomRequest(nickname = "게스트"))
+        val guest = GuestPrincipal(joined.participant.id, room.id)
+
+        val received = LinkedBlockingQueue<Map<String, Any?>>()
+        val session = subscribeRoom(room.id, hostId, received)
+
+        sessionService.start(room.id, hostId)
+        drainUntil(received, "QUESTION_STARTED")
+        answerService.submit(room.id, guest, questionsOf(set.id, hostId)[0], "맞음")   // 1번 정답 → 100%
+        sessionService.endCurrentQuestion(room.id, hostId)
+
+        @Suppress("UNCHECKED_CAST")
+        val firstEnded = drainUntil(received, "QUESTION_ENDED")["payload"] as Map<String, Any?>
+        // 견줄 직전이 없으면 필드 자체가 빠진다
+        assertThat(firstEnded).doesNotContainKey("accuracyDelta")
+
+        sessionService.next(room.id, hostId)
+        drainUntil(received, "QUESTION_STARTED")
+        answerService.submit(room.id, guest, questionsOf(set.id, hostId)[1], "틀림")   // 2번 오답 → 0%
+        sessionService.endCurrentQuestion(room.id, hostId)
+
+        @Suppress("UNCHECKED_CAST")
+        val secondEnded = drainUntil(received, "QUESTION_ENDED")["payload"] as Map<String, Any?>
+        assertThat(secondEnded["correctRate"]).isEqualTo(0.0)
+        assertThat(secondEnded["accuracyDelta"]).isEqualTo(-100.0)
+
+        // 같은 사람뿐이라 순위는 그대로다 — 변동 0 이 실제로 계산된 값으로 나간다
+        @Suppress("UNCHECKED_CAST")
+        val ranking = drainUntil(received, "RANKING_UPDATED")["payload"] as List<Map<String, Any?>>
+        assertThat(ranking).hasSize(1)
+        assertThat(ranking[0]["rankChange"]).isEqualTo(0)
 
         session.disconnect()
     }
@@ -273,6 +330,10 @@ class SessionBroadcastTest : IntegrationTestSupport() {
         Thread.sleep(300)
         return session
     }
+
+    /** 세트 문항 id 를 순서대로. 답안 제출이 questionId 를 요구한다 */
+    private fun questionsOf(setId: Long, ownerUserId: Long): List<Long> =
+        questionSetQueryService.getDetail(setId, ownerUserId).second.map { it.id }
 
     private fun drainUntil(queue: LinkedBlockingQueue<Map<String, Any?>>, type: String): Map<String, Any?> {
         repeat(30) {

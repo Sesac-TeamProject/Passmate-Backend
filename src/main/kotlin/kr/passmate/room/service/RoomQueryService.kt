@@ -5,8 +5,13 @@ import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.common.security.AuthPrincipal
 import kr.passmate.common.util.QrCodeGenerator
+import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.room.domain.Room
+import kr.passmate.room.dto.RoomQuestionTimeView
+import kr.passmate.room.dto.RoomQuestionTimesResponse
+import kr.passmate.room.dto.RoomResponse
 import kr.passmate.room.repository.RoomRepository
+import kr.passmate.user.service.UserQueryService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -17,7 +22,59 @@ class RoomQueryService(
     private val participantQueryService: ParticipantQueryService,
     private val qrCodeGenerator: QrCodeGenerator,
     private val clientProperties: ClientProperties,
+    private val userQueryService: UserQueryService,
+    private val questionSetQueryService: QuestionSetQueryService,
 ) {
+
+    /**
+     * 방 상세 응답. 호스트 닉네임과 연결 세트 요약(문항 수·소요시간·문항당 제한)을 붙인다 —
+     * 대기실이 세트 목록·상세를 따로 읽지 않게(웹 버그 리포트 B-21). 세트 내용(문항·정답)은 싣지 않는다.
+     */
+    fun toResponse(room: Room): RoomResponse {
+        val nickname = userQueryService.getNicknames(listOf(room.hostUserId))[room.hostUserId]
+        val stats = room.questionSetId?.let { questionSetQueryService.findStats(it) }
+        // 시간 요약은 이 방 기준이다 — 세트 기본값에 방이 덮어쓴 값(W-02b)을 얹는다
+        val times = stats?.timeLimitSecByQuestionId
+            ?.map { (questionId, default) -> room.timeLimitSecOf(questionId, default) }
+            .orEmpty()
+        return RoomResponse.of(
+            room = room,
+            hostNickname = nickname,
+            questionCount = stats?.questionCount,
+            estimatedSeconds = times.takeIf { it.isNotEmpty() }?.sum(),
+            minTimeLimitSec = times.minOrNull(),
+            maxTimeLimitSec = times.maxOrNull(),
+        )
+    }
+
+    /**
+     * 문항별 시간 화면(W-02b). 세트 문항에 이 방이 덮어쓴 시간을 얹어 준다. 호스트만 —
+     * 세트는 호스트 소유라 방 문맥에서만 호스트 자격으로 꺼낸다. 정답·해설은 싣지 않는다.
+     */
+    fun questionTimes(roomId: Long, hostUserId: Long): RoomQuestionTimesResponse {
+        val room = getRoom(roomId)
+        room.verifyHost(hostUserId)
+        val setId = room.questionSetId ?: throw BusinessException(ErrorCode.QUESTION_SET_REQUIRED)
+        val (_, questions) = questionSetQueryService.getDetail(setId, room.hostUserId)
+
+        val views = questions.map { question ->
+            RoomQuestionTimeView(
+                questionId = question.id,
+                orderNo = question.orderNo,
+                type = question.type,
+                content = question.content,
+                defaultTimeLimitSec = question.timeLimitSec,
+                timeLimitSec = room.timeLimitSecOf(question.id, question.timeLimitSec),
+                overridden = room.hasTimeOverride(question.id),
+            )
+        }
+        return RoomQuestionTimesResponse(
+            roomId = room.id,
+            questionSetId = setId,
+            estimatedSeconds = views.sumOf { it.timeLimitSec },
+            questions = views,
+        )
+    }
 
     /**
      * 아직 안 끝난 방(대기·진행)이 이 문제 세트를 쓰고 있는지.
