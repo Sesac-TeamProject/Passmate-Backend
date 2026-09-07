@@ -177,6 +177,34 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `서술형 지문이 모범답안과 같은 응답은 한 번 재시도해 정상 결과를 저장한다`() {
+        // 실제 사례(2026-09-08, 세트 6): 모델이 모범답안을 content 에도 그대로 써 보냈다
+        val setId = createSet()
+        fake.respondOnceWith(listOf(essayWithAnswerAsContent()))
+
+        val body = generate(setId, """{"topic":"자료구조 - 힙","counts":{"ESSAY":1}}""")
+            .andExpect(status().isCreated).andReturn().json()
+
+        assertThat(fake.callCount).isEqualTo(2)
+        val saved = body.single()
+        assertThat(saved.get("content").asText()).isNotEqualTo(saved.get("answer").asText())
+        assertThat(successCount()).isEqualTo(1)
+    }
+
+    @Test
+    fun `두 번 다 지문과 모범답안이 같으면 502 이고 무료 횟수는 깎이지 않는다`() {
+        val setId = createSet()
+        fake.respondWith(listOf(essayWithAnswerAsContent()))
+
+        generate(setId, """{"topic":"자료구조 - 힙","counts":{"ESSAY":1}}""")
+            .andExpect(status().isBadGateway)
+            .andExpect(jsonPath("$.code").value("AI_GENERATION_FAILED"))
+
+        assertThat(fake.callCount).isEqualTo(2)
+        assertThat(successCount()).isZero()
+    }
+
+    @Test
     fun `잔여 횟수는 회원만 조회한다`() {
         mockMvc.perform(get("/users/me/ai-quota")).andExpect(status().isUnauthorized)
     }
@@ -399,6 +427,11 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     private fun register(key: String): Pair<Long, String> {
         val outcome = userService.loginOrRegister(AuthProvider.GOOGLE, "ai-$key", "$key@example.com", key, null)
         return outcome.user.id to jwtTokenProvider.issue(outcome.user.id, outcome.user.isAdmin).accessToken
+    }
+
+    private fun essayWithAnswerAsContent(): GeneratedQuestion {
+        val text = "힙 자료구조는 이진 트리의 특성을 가지며, 각 부모 노드는 자식 노드들보다 크거나 작아야 한다."
+        return GeneratedQuestion(QuestionType.ESSAY, text, null, text, "해설", Difficulty.NORMAL)
     }
 
     private fun createSet(title: String = "AI 세트"): Long =

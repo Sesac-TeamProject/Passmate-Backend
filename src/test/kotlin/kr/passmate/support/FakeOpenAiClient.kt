@@ -43,6 +43,7 @@ class FakeOpenAiClient : OpenAiClient {
     private var failingCalls: Set<Int> = emptySet()
     private var failureRetryable: Boolean = true
     private var scripted: List<GeneratedQuestion>? = null
+    private val scriptedOnce: ArrayDeque<List<GeneratedQuestion>> = ArrayDeque()
     private var analysisFailuresLeft: Int = 0
     private var analysisFailureRetryable: Boolean = true
 
@@ -63,6 +64,11 @@ class FakeOpenAiClient : OpenAiClient {
         scripted = questions
     }
 
+    /** 다음 한 번의 호출에만 이 결과를 돌려준다. 재시도 뒤 정상 응답을 흉내낼 때 쓴다. 여러 번 부르면 순서대로 소비된다. */
+    fun respondOnceWith(questions: List<GeneratedQuestion>) {
+        scriptedOnce.addLast(questions)
+    }
+
     /** 앞선 [times] 번 분석 호출을 실패시킨다. 환급 경로를 확인할 때 쓴다. */
     fun failAnalysisTimes(times: Int, retryable: Boolean = true) {
         analysisFailuresLeft = times
@@ -77,6 +83,7 @@ class FakeOpenAiClient : OpenAiClient {
         failingCalls = emptySet()
         failureRetryable = true
         scripted = null
+        scriptedOnce.clear()
         analysisCallCount = 0
         lastAnalysisRequest = null
         analysisFailuresLeft = 0
@@ -114,7 +121,7 @@ class FakeOpenAiClient : OpenAiClient {
         }
 
         return AiGenerationResult(
-            questions = scripted ?: defaultQuestions(request),
+            questions = scriptedOnce.removeFirstOrNull() ?: scripted ?: defaultQuestions(request),
             model = FAKE_MODEL,
             durationMs = 1,
         )
