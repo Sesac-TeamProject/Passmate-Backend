@@ -101,6 +101,7 @@ CREATE TABLE room (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   host_user_id BIGINT NOT NULL,
   question_set_id BIGINT NULL,
+  question_time_overrides JSON NULL COMMENT '이 방에서만 쓰는 문항별 제한시간 {questionId: sec}. NULL = 세트 기본값',
   title VARCHAR(100) NOT NULL,
   description VARCHAR(500) NULL,
   topic VARCHAR(50) NULL COMMENT '주제 태그(백엔드/CS 면접/네트워크 …)',

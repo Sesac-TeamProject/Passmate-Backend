@@ -156,6 +156,7 @@ Table room {
   id bigint [pk, increment]
   host_user_id bigint [not null, ref: > user.id]
   question_set_id bigint [ref: > question_set.id, note: '확정 세트만, 연결 전 NULL']
+  question_time_overrides json [note: '이 방에서만 쓰는 문항별 제한시간 {questionId: sec}. NULL = 세트 기본값. 확정 세트는 불변이라 방이 덮어쓴다(W-02b, 2026-09-07 B-18). 세션 시작 시 session_question.time_limit_sec 로 복사, 세트를 바꾸면 비움']
   title varchar(100) [not null]
   description varchar(500)
   topic varchar(50) [note: '주제 태그 — 백엔드 / CS 면접 / 네트워크 … (홈·탐색 카드)']

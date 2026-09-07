@@ -57,6 +57,7 @@ erDiagram
         bigint id PK
         bigint host_user_id FK
         bigint question_set_id FK
+        json question_time_overrides "questionId → sec, NULL = 세트 기본값"
         varchar title
         varchar topic
         char pin
