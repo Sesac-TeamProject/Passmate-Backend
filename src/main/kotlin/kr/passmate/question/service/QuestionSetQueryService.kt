@@ -12,12 +12,14 @@ import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
-/** 세트 요약 — 방 상세가 "문항 수·예상 소요시간·문항당 제한"을 채울 때 쓴다. 세트 내용은 주지 않는다. */
+/**
+ * 세트 요약 — 방 상세가 "문항 수·예상 소요시간·문항당 제한"을 채울 때 쓴다. 세트 내용(지문·정답)은 주지 않는다.
+ * 시간은 문항별로 준다 — 방이 문항 단위로 덮어쓴 값(room.question_time_overrides)을 얹어 계산해야 하므로.
+ */
 data class QuestionSetStats(
     val questionCount: Int,
-    val estimatedSeconds: Int?,
-    val minTimeLimitSec: Int?,
-    val maxTimeLimitSec: Int?,
+    /** questionId → 세트에 적힌 제한시간(초) */
+    val timeLimitSecByQuestionId: Map<Long, Int>,
 )
 
 @Service
@@ -61,12 +63,10 @@ class QuestionSetQueryService(
      */
     fun findStats(setId: Long): QuestionSetStats? {
         val set = questionSetRepository.findById(setId).orElse(null) ?: return null
-        val timeLimits = questionRepository.findAllBySetIdOrderByOrderNoAsc(setId).map { it.timeLimitSec }
         return QuestionSetStats(
             questionCount = set.questionCount,
-            estimatedSeconds = set.estimatedSeconds,
-            minTimeLimitSec = timeLimits.minOrNull(),
-            maxTimeLimitSec = timeLimits.maxOrNull(),
+            timeLimitSecByQuestionId = questionRepository.findAllBySetIdOrderByOrderNoAsc(setId)
+                .associate { it.id to it.timeLimitSec },
         )
     }
 

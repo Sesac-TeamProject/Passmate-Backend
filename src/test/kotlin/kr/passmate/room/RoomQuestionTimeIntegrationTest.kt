@@ -100,6 +100,13 @@ class RoomQuestionTimeIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.questions[0].timeLimitSec").value(20))
             .andExpect(jsonPath("$.questions[0].overridden").value(true))
 
+        // 방 상세의 KPI 도 이 방 기준 값이다
+        mockMvc.perform(get("/rooms/{id}", roomId).header(AUTH, bearer(hostToken)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.minTimeLimitSec").value(20))
+            .andExpect(jsonPath("$.maxTimeLimitSec").value(60))
+            .andExpect(jsonPath("$.estimatedSeconds").value(80))
+
         // 세션 시작 시 session_question 으로 복사되는 값이 덮어쓴 값이다
         mockMvc.perform(post("/rooms/{id}/session/start", roomId).header(AUTH, bearer(hostToken)))
             .andExpect(status().isNoContent)

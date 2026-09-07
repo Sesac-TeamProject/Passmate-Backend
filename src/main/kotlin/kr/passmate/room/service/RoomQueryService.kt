@@ -33,13 +33,17 @@ class RoomQueryService(
     fun toResponse(room: Room): RoomResponse {
         val nickname = userQueryService.getNicknames(listOf(room.hostUserId))[room.hostUserId]
         val stats = room.questionSetId?.let { questionSetQueryService.findStats(it) }
+        // 시간 요약은 이 방 기준이다 — 세트 기본값에 방이 덮어쓴 값(W-02b)을 얹는다
+        val times = stats?.timeLimitSecByQuestionId
+            ?.map { (questionId, default) -> room.timeLimitSecOf(questionId, default) }
+            .orEmpty()
         return RoomResponse.of(
             room = room,
             hostNickname = nickname,
             questionCount = stats?.questionCount,
-            estimatedSeconds = stats?.estimatedSeconds,
-            minTimeLimitSec = stats?.minTimeLimitSec,
-            maxTimeLimitSec = stats?.maxTimeLimitSec,
+            estimatedSeconds = times.takeIf { it.isNotEmpty() }?.sum(),
+            minTimeLimitSec = times.minOrNull(),
+            maxTimeLimitSec = times.maxOrNull(),
         )
     }
 
