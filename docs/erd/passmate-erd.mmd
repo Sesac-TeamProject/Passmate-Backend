@@ -113,6 +113,12 @@ erDiagram
         json missing_points
         json suggestions
     }
+    session_question_comment {
+        bigint id PK
+        bigint session_question_id FK
+        bigint reviewer_user_id FK
+        text comment
+    }
     teacher_review {
         bigint id PK
         bigint answer_id FK
@@ -354,6 +360,7 @@ erDiagram
     room ||--o| branded_quiz : ""
     participant ||--o{ answer : ""
     session_question ||--o{ answer : ""
+    session_question ||--o| session_question_comment : ""
     answer ||--o| ai_feedback : ""
     answer ||--o| teacher_review : ""
     participant ||--o| participant_report : ""

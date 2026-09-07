@@ -257,6 +257,16 @@ Table ai_feedback {
   updated_at datetime
 }
 
+Table session_question_comment {
+  id bigint [pk, increment]
+  session_question_id bigint [not null, unique, ref: > session_question.id]
+  reviewer_user_id bigint [not null, ref: > user.id]
+  comment text [not null]
+  created_at datetime [not null]
+  updated_at datetime
+  Note: '문항 단위 선생님 코멘트 — 학생 전체 대상(W-07 우측 패널, 2026-09-07 B-14). 답안별 첨삭(teacher_review)과 별개'
+}
+
 Table teacher_review {
   id bigint [pk, increment]
   answer_id bigint [not null, unique, ref: - answer.id]

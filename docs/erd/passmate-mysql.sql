@@ -264,6 +264,18 @@ CREATE TABLE ai_feedback (
   CONSTRAINT fk_ai_feedback_user FOREIGN KEY (user_id) REFERENCES `user`(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE session_question_comment (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  session_question_id BIGINT NOT NULL,
+  reviewer_user_id BIGINT NOT NULL,
+  comment TEXT NOT NULL,
+  created_at DATETIME(6) NOT NULL,
+  updated_at DATETIME(6) NULL,
+  UNIQUE KEY uk_sqc_question (session_question_id),
+  CONSTRAINT fk_sqc_sq FOREIGN KEY (session_question_id) REFERENCES session_question(id),
+  CONSTRAINT fk_sqc_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES `user`(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='문항 단위 선생님 코멘트 — 학생 전체 대상(W-07)';
+
 CREATE TABLE teacher_review (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   answer_id BIGINT NOT NULL,
