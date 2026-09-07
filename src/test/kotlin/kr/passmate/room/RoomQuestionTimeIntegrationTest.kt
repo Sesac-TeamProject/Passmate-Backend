@@ -99,6 +99,14 @@ class RoomQuestionTimeIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.questions[0].timeLimitSec").value(20))
             .andExpect(jsonPath("$.questions[0].overridden").value(true))
+
+        // 세션 시작 시 session_question 으로 복사되는 값이 덮어쓴 값이다
+        mockMvc.perform(post("/rooms/{id}/session/start", roomId).header(AUTH, bearer(hostToken)))
+            .andExpect(status().isNoContent)
+        mockMvc.perform(get("/rooms/{id}/session", roomId).header(AUTH, bearer(hostToken)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.currentQuestion.questionId").value(mcqId))
+            .andExpect(jsonPath("$.currentQuestion.timeLimitSec").value(20))
     }
 
     @Test

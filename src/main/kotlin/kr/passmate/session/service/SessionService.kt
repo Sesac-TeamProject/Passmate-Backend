@@ -43,6 +43,7 @@ class SessionService(
     /**
      * 세션을 시작한다. 확정된 문제 세트의 문항을 session_question 으로 복사해 두고 1번 문항을 연다.
      * 복사하는 이유: 세트는 여러 방에 재사용되는데 시작·마감 시각과 집계는 방마다 다르다.
+     * 제한시간은 방이 덮어쓴 값(W-02b)이 있으면 그것을, 없으면 세트 값을 복사한다.
      */
     @Transactional
     fun start(roomId: Long, hostUserId: Long) {
@@ -62,7 +63,7 @@ class SessionService(
                     roomId = roomId,
                     questionId = it.id,
                     orderNo = it.orderNo,
-                    timeLimitSec = it.timeLimitSec,
+                    timeLimitSec = room.timeLimitSecOf(it.id, it.timeLimitSec),
                 )
             },
         )
