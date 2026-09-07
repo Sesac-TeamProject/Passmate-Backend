@@ -43,12 +43,10 @@ data class PublicRoomResponse(
             questionCount = questionCount,
             participantCount = room.participantCount,
             maxParticipants = room.maxParticipants,
-            host = PublicRoomHostResponse(room.hostUserId, hostNickname ?: UNKNOWN_HOST),
+            host = PublicRoomHostResponse.of(room.hostUserId, hostNickname),
             scheduledAt = room.scheduledAt,
             startedAt = room.startedAt,
         )
-
-        private const val UNKNOWN_HOST = "알 수 없음"
     }
 }
 
@@ -60,4 +58,11 @@ data class PublicRoomResponse(
 data class PublicRoomHostResponse(
     val userId: Long,
     val nickname: String,
-)
+) {
+    companion object {
+        /** 회원 행을 못 찾으면(탈퇴 등) 자리 표시 이름으로 채운다 — 카드가 비어 보이지 않게 */
+        fun of(userId: Long, nickname: String?) = PublicRoomHostResponse(userId, nickname ?: UNKNOWN_HOST)
+
+        private const val UNKNOWN_HOST = "알 수 없음"
+    }
+}
