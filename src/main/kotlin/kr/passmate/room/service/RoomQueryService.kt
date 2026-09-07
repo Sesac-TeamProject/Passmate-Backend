@@ -7,6 +7,8 @@ import kr.passmate.common.security.AuthPrincipal
 import kr.passmate.common.util.QrCodeGenerator
 import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.room.domain.Room
+import kr.passmate.room.dto.RoomQuestionTimeView
+import kr.passmate.room.dto.RoomQuestionTimesResponse
 import kr.passmate.room.dto.RoomResponse
 import kr.passmate.room.repository.RoomRepository
 import kr.passmate.user.service.UserQueryService
@@ -38,6 +40,35 @@ class RoomQueryService(
             estimatedSeconds = stats?.estimatedSeconds,
             minTimeLimitSec = stats?.minTimeLimitSec,
             maxTimeLimitSec = stats?.maxTimeLimitSec,
+        )
+    }
+
+    /**
+     * 문항별 시간 화면(W-02b). 세트 문항에 이 방이 덮어쓴 시간을 얹어 준다. 호스트만 —
+     * 세트는 호스트 소유라 방 문맥에서만 호스트 자격으로 꺼낸다. 정답·해설은 싣지 않는다.
+     */
+    fun questionTimes(roomId: Long, hostUserId: Long): RoomQuestionTimesResponse {
+        val room = getRoom(roomId)
+        room.verifyHost(hostUserId)
+        val setId = room.questionSetId ?: throw BusinessException(ErrorCode.QUESTION_SET_REQUIRED)
+        val (_, questions) = questionSetQueryService.getDetail(setId, room.hostUserId)
+
+        val views = questions.map { question ->
+            RoomQuestionTimeView(
+                questionId = question.id,
+                orderNo = question.orderNo,
+                type = question.type,
+                content = question.content,
+                defaultTimeLimitSec = question.timeLimitSec,
+                timeLimitSec = room.timeLimitSecOf(question.id, question.timeLimitSec),
+                overridden = room.hasTimeOverride(question.id),
+            )
+        }
+        return RoomQuestionTimesResponse(
+            roomId = room.id,
+            questionSetId = setId,
+            estimatedSeconds = views.sumOf { it.timeLimitSec },
+            questions = views,
         )
     }
 

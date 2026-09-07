@@ -10,6 +10,8 @@ import kr.passmate.common.security.UserPrincipal
 import kr.passmate.room.dto.PublicRoomResponse
 import kr.passmate.room.dto.PublicRoomSearchRequest
 import kr.passmate.room.dto.RoomCreateRequest
+import kr.passmate.room.dto.RoomQuestionTimesRequest
+import kr.passmate.room.dto.RoomQuestionTimesResponse
 import kr.passmate.room.dto.RoomResponse
 import kr.passmate.room.dto.RoomSummaryResponse
 import kr.passmate.room.dto.RoomUpdateRequest
@@ -72,6 +74,32 @@ class RoomController(
         @PathVariable roomId: Long,
         @Valid @RequestBody request: RoomUpdateRequest,
     ): RoomResponse = roomQueryService.toResponse(roomService.update(roomId, principal.userId, request))
+
+    @Operation(
+        summary = "방 문항별 시간 조회",
+        description = "이 방에서 쓸 문항별 제한시간(세트 기본값 + 방에서 덮어쓴 값). 정답·해설은 싣지 않는다. 호스트만. " +
+            "세트를 아직 연결하지 않았으면 409.",
+    )
+    @GetMapping("/{roomId}/question-times")
+    fun questionTimes(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable roomId: Long,
+    ): RoomQuestionTimesResponse = roomQueryService.questionTimes(roomId, principal.userId)
+
+    @Operation(
+        summary = "방 문항별 시간 설정",
+        description = "확정 세트는 그대로 두고 이 방에서만 제한시간을 덮어쓴다(W-02b). PUT 은 전체 교체 — " +
+            "본문에 없는 문항은 세트 기본값으로 돌아가고, 빈 목록이면 전부 초기화. 대기 중 호스트만.",
+    )
+    @PutMapping("/{roomId}/question-times")
+    fun updateQuestionTimes(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable roomId: Long,
+        @Valid @RequestBody request: RoomQuestionTimesRequest,
+    ): RoomQuestionTimesResponse {
+        roomService.updateQuestionTimes(roomId, principal.userId, request)
+        return roomQueryService.questionTimes(roomId, principal.userId)
+    }
 
     @Operation(
         summary = "방 종료(취소)",
