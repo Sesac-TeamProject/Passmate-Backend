@@ -76,7 +76,7 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
         val set = questionSetService.create(hostId, QuestionSetCreateRequest("결과 테스트"))
         mcqId = questionSetService.addQuestion(
             set.id, hostId,
-            QuestionRequest(QuestionType.MCQ, "404 는?", listOf("성공", "찾을 수 없음"), "찾을 수 없음", explanation = "Not Found", timeLimitSec = 30, points = 100),
+            QuestionRequest(QuestionType.MCQ, "404 는?", listOf("성공", "찾을 수 없음"), "찾을 수 없음", explanation = "Not Found", topic = "HTTP", timeLimitSec = 30, points = 100),
         ).id
         essayId = questionSetService.addQuestion(
             set.id, hostId,
@@ -168,6 +168,8 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.questions[0].answer").doesNotExist())
             .andExpect(jsonPath("$.questions[0].explanation").doesNotExist())
+            // 진행 중 분포는 호스트만 본다 — 반 정답률도 마감 전에는 내보내지 않는다
+            .andExpect(jsonPath("$.questions[0].correctRate").doesNotExist())
 
         endCurrent()
 
@@ -175,6 +177,41 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.questions[0].answer").value("찾을 수 없음"))
             .andExpect(jsonPath("$.questions[0].explanation").value("Not Found"))
+            .andExpect(jsonPath("$.questions[0].correctRate").value(100.0))
+    }
+
+    @Test
+    fun `내 결과에 주제·반 정답률·소요 시간·참가자 수가 실린다`() {
+        runWholeSession()
+
+        val body = myResult(studentToken).andExpect(status().isOk).andReturn().json()
+
+        // "3위 / 24명"의 분모 — 순위를 매긴 인원과 같다(중도 이탈자 포함, 웹 버그 리포트 B-20)
+        assertThat(body.get("participantCount").asInt()).isEqualTo(3)
+        // 제출한 문항의 소요 시간 합. 서버 시각끼리의 차라 0 이상이면 된다
+        assertThat(body.get("elapsedMs").asLong()).isGreaterThanOrEqualTo(0)
+
+        val mcq = body.get("questions")[0]
+        assertThat(mcq.get("topic").asText()).isEqualTo("HTTP")
+        // 학생 정답·게스트 오답 → 반 정답률 50%. 방 리포트 문항별 탭과 같은 정의
+        assertThat(mcq.get("correctRate").asDouble()).isEqualTo(50.0)
+        assertThat(mcq.get("elapsedMs").asLong()).isGreaterThanOrEqualTo(0)
+
+        val essay = body.get("questions")[1]
+        // 주제를 안 적은 문항은 비어 있고, 서술형은 채점 전이라 반 정답률 0
+        assertThat(essay.has("topic")).isFalse()
+        assertThat(essay.get("correctRate").asDouble()).isEqualTo(0.0)
+    }
+
+    @Test
+    fun `아무것도 내지 않았으면 소요 시간이 없다`() {
+        runWholeSession()
+
+        val body = myResult(idleToken).andExpect(status().isOk).andReturn().json()
+
+        // 0ms 와 "안 풀었다"는 다르다 — 필드 자체를 뺀다
+        assertThat(body.has("elapsedMs")).isFalse()
+        assertThat(body.get("questions")[0].has("elapsedMs")).isFalse()
     }
 
     @Test

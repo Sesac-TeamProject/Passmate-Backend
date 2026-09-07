@@ -68,9 +68,10 @@ class ParticipantReportService(
 
     /** 방 전원의 리포트를 찍는다. 이미 있으면 덮어쓴다 — 다시 불러도 행이 늘지 않는다. */
     @Transactional
-    fun generate(roomId: Long): List<ParticipantReport> {
-        val room = roomQueryService.getRoom(roomId)
-        val materials = materialsLoader.load(room)
+    fun generate(roomId: Long): List<ParticipantReport> =
+        generate(materialsLoader.load(roomQueryService.getRoom(roomId)))
+
+    private fun generate(materials: SessionMaterials): List<ParticipantReport> {
         val existing = reportRepository
             .findAllByParticipantIdIn(materials.participants.map { it.id })
             .associateBy { it.participantId }
@@ -115,10 +116,21 @@ class ParticipantReportService(
 
         val participantId = answerQueryService.resolveParticipantId(roomId, principal)
         val participant = participantQueryService.getOfRoom(roomId, participantId)
+        val materials = materialsLoader.load(room)
         val report = reportRepository.findByParticipantId(participantId)
-            ?: generate(roomId).firstOrNull { it.participantId == participantId }
+            ?: generate(materials).firstOrNull { it.participantId == participantId }
             ?: throw BusinessException(ErrorCode.NOT_FOUND, "학습 리포트를 만들 수 없습니다.")
 
-        return LearningReportResponse.of(roomId, room.title, participant.nickname, report)
+        return LearningReportResponse.of(
+            roomId = roomId,
+            roomTitle = room.title,
+            nickname = participant.nickname,
+            report = report,
+            // 반 비교·주제별 카드는 스냅샷이 아니라 같은 재료에서 그때그때 센다 —
+            // 정오는 첨삭에도 바뀌지 않아 값이 흔들리지 않고, 표를 늘리지 않아도 된다
+            classAvgAccuracy = materials.classAvgAccuracy,
+            topAccuracy = materials.topAccuracy,
+            topicAccuracy = materials.topicAccuracyOf(participantId),
+        )
     }
 }
