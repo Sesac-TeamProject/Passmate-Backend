@@ -8,6 +8,8 @@ import kr.passmate.room.domain.RoomType
 import kr.passmate.room.dto.RoomCreateRequest
 import kr.passmate.room.dto.RoomUpdateRequest
 import kr.passmate.room.service.RoomService
+import kr.passmate.room.dto.QuestionTimeEntry
+import kr.passmate.room.dto.RoomQuestionTimesRequest
 import kr.passmate.session.repository.SessionQuestionRepository
 import kr.passmate.session.service.QuestionTimeoutScheduler
 import kr.passmate.session.service.SessionService
@@ -39,6 +41,54 @@ class QuestionTimeoutSchedulerTest : IntegrationTestSupport() {
     @Autowired private lateinit var jdbcTemplate: JdbcTemplate
 
     @Test
+    fun `자동 넘김이 켜진 문항은 마감 뒤 결과 표시 시간이 지나면 다음 문항이 자동으로 열린다`() {
+        val roomId = runningRoom(questionCount = 2, autoAdvanceFirst = true)
+        val (first, second) = sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(roomId)
+
+        expire(first.id)
+        scheduler.closeExpiredQuestions()
+
+        // 마감 직후에는 열지 않는다 — 결과 화면(W-06)을 볼 시간을 준다
+        assertThat(sessionQuestionRepository.findById(second.id).orElseThrow().startedAt).isNull()
+
+        // 결과 표시 시간이 지난 것으로 만든다
+        jdbcTemplate.update(
+            "update session_question set ended_at = ? where id = ?",
+            LocalDateTime.now().minusSeconds(60), first.id,
+        )
+        scheduler.closeExpiredQuestions()
+
+        assertThat(sessionQuestionRepository.findById(second.id).orElseThrow().startedAt).isNotNull()
+
+        // 마지막 문항이라 더 넘어갈 곳이 없다 — 다음 틱이 아무것도 하지 않는다(폴링이 지난 세션을 집지 않게)
+        expire(second.id)
+        scheduler.closeExpiredQuestions()
+        jdbcTemplate.update(
+            "update session_question set ended_at = ? where id = ?",
+            LocalDateTime.now().minusSeconds(60), second.id,
+        )
+        scheduler.closeExpiredQuestions()
+        assertThat(sessionQuestionRepository.findAutoAdvanceDue(LocalDateTime.now())).isEmpty()
+    }
+
+    @Test
+    fun `자동 넘김이 꺼진 문항은 마감돼도 다음 문항이 열리지 않는다`() {
+        val roomId = runningRoom(questionCount = 2, autoAdvanceFirst = false)
+        val (first, second) = sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(roomId)
+
+        expire(first.id)
+        scheduler.closeExpiredQuestions()
+        jdbcTemplate.update(
+            "update session_question set ended_at = ? where id = ?",
+            LocalDateTime.now().minusSeconds(60), first.id,
+        )
+        scheduler.closeExpiredQuestions()
+
+        // 호스트가 "다음 문항"을 누를 때까지 기다린다 — 지금까지의 진행 방식 그대로
+        assertThat(sessionQuestionRepository.findById(second.id).orElseThrow().startedAt).isNull()
+    }
+
+    @Test
     fun `제한시간이 지난 문항은 한 번 마감되고 다음 틱에 다시 잡히지 않는다`() {
         val roomId = runningRoom()
         val sq = sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(roomId).first()
@@ -67,20 +117,28 @@ class QuestionTimeoutSchedulerTest : IntegrationTestSupport() {
         )
     }
 
-    /** 문항 하나짜리 방을 만들고 세션을 시작한다. */
-    private fun runningRoom(): Long {
+    /** OX 문항 [questionCount]개짜리 방을 만들고 세션을 시작한다. */
+    private fun runningRoom(questionCount: Int = 1, autoAdvanceFirst: Boolean = false): Long {
         val key = "timeout-${System.nanoTime()}"
         val hostId = userService.loginOrRegister(AuthProvider.GOOGLE, key, null, "호스트", null).user.id
 
         val set = questionSetService.create(hostId, QuestionSetCreateRequest("타이머 테스트"))
-        questionSetService.addQuestion(
-            set.id, hostId,
-            QuestionRequest(QuestionType.OX, "서버가 마감하는가?", answer = "O", timeLimitSec = 5, points = 100),
-        )
+        val questionIds = (1..questionCount).map { no ->
+            questionSetService.addQuestion(
+                set.id, hostId,
+                QuestionRequest(QuestionType.OX, "문항 $no", answer = "O", timeLimitSec = 5, points = 100),
+            ).id
+        }
         questionSetService.confirm(set.id, hostId)
 
         val room = roomService.create(hostId, RoomCreateRequest(title = "타이머", type = RoomType.FREE))
         roomService.update(room.id, hostId, RoomUpdateRequest(title = "타이머", questionSetId = set.id))
+        if (autoAdvanceFirst) {
+            roomService.updateQuestionTimes(
+                room.id, hostId,
+                RoomQuestionTimesRequest(listOf(QuestionTimeEntry(questionIds.first(), timeLimitSec = 5, autoAdvance = true))),
+            )
+        }
         sessionService.start(room.id, hostId)
         return room.id
     }

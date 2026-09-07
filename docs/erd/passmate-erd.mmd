@@ -58,6 +58,7 @@ erDiagram
         bigint host_user_id FK
         bigint question_set_id FK
         json question_time_overrides "questionId → sec, NULL = 세트 기본값"
+        json question_auto_advance "자동 넘김 켠 문항 id 배열"
         varchar title
         varchar topic
         char pin
@@ -78,6 +79,7 @@ erDiagram
         bigint question_id FK
         int order_no
         int time_limit_sec
+        boolean auto_advance
         datetime started_at
         datetime ends_at
         datetime ended_at
@@ -110,6 +112,12 @@ erDiagram
         json key_points
         json missing_points
         json suggestions
+    }
+    session_question_comment {
+        bigint id PK
+        bigint session_question_id FK
+        bigint reviewer_user_id FK
+        text comment
     }
     teacher_review {
         bigint id PK
@@ -352,6 +360,7 @@ erDiagram
     room ||--o| branded_quiz : ""
     participant ||--o{ answer : ""
     session_question ||--o{ answer : ""
+    session_question ||--o| session_question_comment : ""
     answer ||--o| ai_feedback : ""
     answer ||--o| teacher_review : ""
     participant ||--o| participant_report : ""

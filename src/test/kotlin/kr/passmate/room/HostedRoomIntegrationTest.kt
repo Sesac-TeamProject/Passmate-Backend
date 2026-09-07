@@ -98,6 +98,34 @@ class HostedRoomIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `취소한 방은 진행 중이 아니라 종료 목록에 취소 상태로 담긴다`() {
+        // 와이어프레임(W-09·M-13)에는 진행 중·종료 두 상태뿐이라 취소는 종료 쪽에 붙인다(2026-09-07 결정).
+        // 종료 여부만으로 가르면 취소된 방이 진행 중에 섞여 "진행 중인 방 열기"가 취소된 방을 열었다
+        val canceled = roomService.create(hostId, RoomCreateRequest(title = "취소한 방", type = RoomType.FREE))
+        participantService.join(canceled.id, studentId, JoinRoomRequest(nickname = "먼저 들어온 학생"))
+        roomService.close(canceled.id, hostId)   // 시작 전 종료 = CANCELED
+        val playedId = playRoom("끝난 방")
+
+        val body = hosted().andExpect(status().isOk).andReturn().json()
+
+        assertThat(body.get("active")).isEmpty()
+        val ended = body.get("ended")
+        assertThat(ended).hasSize(2)
+
+        val canceledRow = ended.first { it.get("roomId").asLong() == canceled.id }
+        assertThat(canceledRow.get("status").asText()).isEqualTo("CANCELED")
+        // 세션이 없었으니 성적·별점은 없다. 대기실에 들어왔던 사람도 세지 않는다 — "학생 1명"으로 읽히면 안 된다
+        assertThat(canceledRow.get("studentCount").asLong()).isZero()
+        assertThat(canceledRow.has("correctRate")).isFalse()
+        assertThat(canceledRow.has("averageStars")).isFalse()
+        assertThat(canceledRow.get("endedAt").isNull).isFalse()
+
+        val playedRow = ended.first { it.get("roomId").asLong() == playedId }
+        assertThat(playedRow.get("status").asText()).isEqualTo("ENDED")
+        assertThat(playedRow.get("correctRate").asDouble()).isEqualTo(100.0)
+    }
+
+    @Test
     fun `끝난 방은 학생 수와 평균 정답률이 함께 나온다`() {
         val roomId = playRoom("끝난 방")
 

@@ -157,6 +157,7 @@ Table room {
   host_user_id bigint [not null, ref: > user.id]
   question_set_id bigint [ref: > question_set.id, note: '확정 세트만, 연결 전 NULL']
   question_time_overrides json [note: '이 방에서만 쓰는 문항별 제한시간 {questionId: sec}. NULL = 세트 기본값. 확정 세트는 불변이라 방이 덮어쓴다(W-02b, 2026-09-07 B-18). 세션 시작 시 session_question.time_limit_sec 로 복사, 세트를 바꾸면 비움']
+  question_auto_advance json [note: '자동 넘김을 켠 문항 id 배열. NULL = 전부 꺼짐 (W-02b 토글, 2026-09-07). 세트를 바꾸면 비움']
   title varchar(100) [not null]
   description varchar(500)
   topic varchar(50) [note: '주제 태그 — 백엔드 / CS 면접 / 네트워크 … (홈·탐색 카드)']
@@ -191,6 +192,7 @@ Table session_question {
   question_id bigint [not null, ref: > question.id]
   order_no int [not null]
   time_limit_sec int [not null]
+  auto_advance boolean [not null, default: false, note: '시간 만료 마감 후 다음 문항 자동 개시. 방 설정에서 복사']
   started_at datetime
   ends_at datetime
   ended_at datetime
@@ -253,6 +255,16 @@ Table ai_feedback {
   completed_at datetime
   created_at datetime [not null]
   updated_at datetime
+}
+
+Table session_question_comment {
+  id bigint [pk, increment]
+  session_question_id bigint [not null, unique, ref: > session_question.id]
+  reviewer_user_id bigint [not null, ref: > user.id]
+  comment text [not null]
+  created_at datetime [not null]
+  updated_at datetime
+  Note: '문항 단위 선생님 코멘트 — 학생 전체 대상(W-07 우측 패널, 2026-09-07 B-14). 답안별 첨삭(teacher_review)과 별개'
 }
 
 Table teacher_review {

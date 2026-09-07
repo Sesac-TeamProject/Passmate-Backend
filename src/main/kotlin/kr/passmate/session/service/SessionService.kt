@@ -64,6 +64,7 @@ class SessionService(
                     questionId = it.id,
                     orderNo = it.orderNo,
                     timeLimitSec = room.timeLimitSecOf(it.id, it.timeLimitSec),
+                    autoAdvance = room.isAutoAdvance(it.id),
                 )
             },
         )
@@ -143,6 +144,25 @@ class SessionService(
         val questions = runCatching { questionSetQueryService.getDetail(room.questionSetId!!, room.hostUserId).second }
             .getOrNull() ?: return
         closeQuestion(sq, questions)
+    }
+
+    /**
+     * 자동 넘김(W-02b). 시간 만료로 마감된 문항이 결과 화면을 보여줄 시간을 채우면 다음 문항을 연다.
+     * 서버 권위 타이머가 호출한다. 그 사이 호스트가 직접 넘겼거나 세션이 끝났으면 아무것도 하지 않는다 —
+     * 경합으로 둘이 겹쳐도 SessionQuestion.start() 가 두 번 열리는 것을 막는다.
+     */
+    @Transactional
+    fun advanceByAutoAdvance(sessionQuestionId: Long) {
+        val sq = sessionQuestionRepository.findById(sessionQuestionId).orElse(null) ?: return
+        val room = roomRepository.findById(sq.roomId).orElse(null) ?: return
+        if (room.status != RoomStatus.RUNNING || room.currentQuestionNo != sq.orderNo) return
+
+        val questions = runCatching { questionSetQueryService.getDetail(room.questionSetId!!, room.hostUserId).second }
+            .getOrNull() ?: return
+        val nextOrderNo = sq.orderNo + 1
+        if (questions.none { it.orderNo == nextOrderNo }) return
+
+        openQuestion(room, nextOrderNo, questions)
     }
 
     /**

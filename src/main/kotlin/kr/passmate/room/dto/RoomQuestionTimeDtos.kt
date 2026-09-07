@@ -18,7 +18,7 @@ data class RoomQuestionTimesRequest(
     val times: List<QuestionTimeEntry>,
 )
 
-@Schema(description = "문항 하나의 제한시간")
+@Schema(description = "문항 하나의 제한시간·자동 넘김")
 data class QuestionTimeEntry(
     val questionId: Long,
 
@@ -26,6 +26,9 @@ data class QuestionTimeEntry(
     @field:Min(5)
     @field:Max(600)
     val timeLimitSec: Int,
+
+    @field:Schema(description = "시간 만료로 마감되면 다음 문항을 자동으로 열지 (W-02b 토글)")
+    val autoAdvance: Boolean = false,
 )
 
 /** 정답·해설은 싣지 않는다 — 호스트 화면이지만 프로젝터에 그대로 뜰 수 있다. */
@@ -41,6 +44,8 @@ data class RoomQuestionTimeView(
     val timeLimitSec: Int,
     @field:Schema(description = "이 방에서 덮어쓴 문항인지")
     val overridden: Boolean,
+    @field:Schema(description = "시간 만료로 마감되면 다음 문항을 자동으로 열지")
+    val autoAdvance: Boolean,
 )
 
 @Schema(description = "방 문항별 시간 — 조회·설정 응답")

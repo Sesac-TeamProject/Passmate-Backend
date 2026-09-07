@@ -110,6 +110,15 @@ class Room(
     var questionTimeOverrides: Map<Long, Int>? = null
         protected set
 
+    /**
+     * 자동 넘김을 켠 문항 id 목록(W-02b 토글, 2026-09-07). NULL = 전부 꺼짐.
+     * 시간 만료로 마감된 문항이 여기 있으면 서버가 잠시 뒤 다음 문항을 자동 개시한다.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "question_auto_advance")
+    var questionAutoAdvance: List<Long>? = null
+        protected set
+
     /** 호스트인지 확인하고, 아니면 403 으로 막는다. */
     fun verifyHost(userId: Long) {
         if (userId != hostUserId) throw BusinessException(ErrorCode.NOT_ROOM_HOST)
@@ -126,8 +135,11 @@ class Room(
         scheduledAt: LocalDateTime?,
     ) {
         verifyWaiting("방 정보는 대기 중일 때만 수정할 수 있습니다.")
-        // 덮어쓴 시간은 예전 세트의 문항 id 를 가리킨다 — 세트가 바뀌면 의미가 없으니 비운다
-        if (questionSetId != this.questionSetId) questionTimeOverrides = null
+        // 덮어쓴 시간·자동 넘김은 예전 세트의 문항 id 를 가리킨다 — 세트가 바뀌면 의미가 없으니 비운다
+        if (questionSetId != this.questionSetId) {
+            questionTimeOverrides = null
+            questionAutoAdvance = null
+        }
         this.title = title
         this.description = description
         this.topic = topic
@@ -188,13 +200,18 @@ class Room(
     }
 
     /**
-     * 문항별 시간을 통째로 갈아끼운다(전체 교체 — 빈 맵이면 전부 기본값으로 돌아간다). 대기 중일 때만.
+     * 문항별 시간·자동 넘김을 통째로 갈아끼운다(전체 교체 — 빈 값이면 전부 기본으로 돌아간다). 대기 중일 때만.
      * 문항이 세트에 있는지·시간 범위는 Service 가 세트를 읽어 검사한다 — 방은 세트 내용을 모른다.
      */
-    fun overrideQuestionTimes(times: Map<Long, Int>) {
+    fun overrideQuestionTimes(times: Map<Long, Int>, autoAdvance: Collection<Long> = emptyList()) {
         verifyWaiting("문항별 시간은 대기 중일 때만 바꿀 수 있습니다.")
         questionTimeOverrides = times.takeIf { it.isNotEmpty() }
+        questionAutoAdvance = autoAdvance.distinct().sorted().takeIf { it.isNotEmpty() }
     }
+
+    /** 이 문항이 시간 만료로 마감되면 다음 문항을 자동으로 열지. */
+    fun isAutoAdvance(questionId: Long): Boolean =
+        questionAutoAdvance?.contains(questionId) == true
 
     /** 이 방에서 쓸 제한시간. 덮어쓴 값이 없으면 세트에 적힌 기본값이다. */
     fun timeLimitSecOf(questionId: Long, default: Int): Int =
