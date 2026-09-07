@@ -154,6 +154,29 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `제한시간을 생략하면 유형별 기본값이 들어간다 — 객관식 30초·서술형 90초`() {
+        // W-02b "서술형은 기본 90초로 잡혀 있어요". 유형 무관 30초로 박혀 서술형까지 30초로 생성되던 문제
+        val setId = createSet()
+
+        val body = generate(setId, """{"topic":"자료구조","counts":{"MCQ":1,"ESSAY":1}}""")
+            .andExpect(status().is2xxSuccessful).andReturn().json()
+
+        val secondsByType = body.associate { it.get("type").asText() to it.get("timeLimitSec").asInt() }
+        assertThat(secondsByType["MCQ"]).isEqualTo(30)
+        assertThat(secondsByType["ESSAY"]).isEqualTo(90)
+    }
+
+    @Test
+    fun `제한시간을 넣으면 유형과 무관하게 그 값이 전 문항에 들어간다`() {
+        val setId = createSet()
+
+        val body = generate(setId, """{"topic":"자료구조","counts":{"MCQ":1,"ESSAY":1},"timeLimitSec":45}""")
+            .andExpect(status().is2xxSuccessful).andReturn().json()
+
+        assertThat(body.map { it.get("timeLimitSec").asInt() }).containsOnly(45)
+    }
+
+    @Test
     fun `잔여 횟수는 회원만 조회한다`() {
         mockMvc.perform(get("/users/me/ai-quota")).andExpect(status().isUnauthorized)
     }

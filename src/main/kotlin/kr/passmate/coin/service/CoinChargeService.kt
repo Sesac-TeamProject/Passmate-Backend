@@ -130,7 +130,8 @@ class CoinChargeService(
                 amount = charge.amount,
                 refType = CoinRefType.COIN_CHARGE,
                 refId = charge.id,
-                memo = "코인 충전 · ${charge.merchantUid}",
+                // 화면 문구 그대로(C-02-9 "카카오페이 충전"). 주문 번호는 refId 로 이어간다 — 내역에 보이면 안 된다
+                memo = "${charge.method?.label ?: "코인"} 충전",
             )
         }
         return first

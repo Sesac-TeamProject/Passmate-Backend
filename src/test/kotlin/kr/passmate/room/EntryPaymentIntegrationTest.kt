@@ -115,10 +115,10 @@ class EntryPaymentIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `결제하면 코인 원장에 방 제목과 결제 번호가 남는다`() {
+    fun `결제하면 코인 원장에 "방 제목 참가비" 문구로 남는다`() {
         give(5000)
         val roomId = paidRoom(fee = 1000)
-        val paymentNo = pay(roomId).andReturn().json().get("paymentNo").asText()
+        pay(roomId).andExpect(status().isCreated)
 
         val latest = mockMvc.perform(
             get("/users/me/coins").header("Authorization", "Bearer $studentToken"),
@@ -126,7 +126,9 @@ class EntryPaymentIntegrationTest : IntegrationTestSupport() {
 
         assertThat(latest.get("type").asText()).isEqualTo("ENTRY")
         assertThat(latest.get("amount").asInt()).isEqualTo(-1000)
-        assertThat(latest.get("description").asText()).contains("유료 방").contains(paymentNo)
+        // 화면(C-02-9)에 그대로 나가는 문구다 — 결제 번호는 refId 로 이어가고 내역에는 보이지 않는다
+        assertThat(latest.get("description").asText()).isEqualTo("유료 방 참가비")
+        assertThat(latest.get("refType").asText()).isEqualTo("ENTRY_PAYMENT")
     }
 
     @Test

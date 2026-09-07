@@ -70,14 +70,15 @@ class EntryPaymentService(
             ),
         )
 
-        // 방 제목·영수증 번호를 지금 박아 둔다 — 코인 내역이 room 을 되짚지 않아도 되게
+        // 방 제목을 지금 박아 둔다 — 코인 내역이 room 을 되짚지 않아도 되게.
+        // 문구는 화면 그대로(C-02-9 "Spring 실전 모의고사 참가비"). 결제 번호는 refId 로 이어간다
         val transaction = coinService.deduct(
             userId = userId,
             amount = fee,
             type = CoinTransactionType.ENTRY,
             refType = CoinRefType.ENTRY_PAYMENT,
             refId = payment.id,
-            memo = "${room.title} · ${payment.paymentNo}",
+            memo = "${room.title} 참가비",
         )
         return EntryPaymentResponse.of(payment, transaction.balanceAfter)
     }
@@ -109,7 +110,7 @@ class EntryPaymentService(
             amount = payment.amount,
             refType = CoinRefType.ENTRY_PAYMENT,
             refId = payment.id,
-            memo = "${room.title} · ${payment.paymentNo} 취소",
+            memo = "${room.title} 참가비 환급",
         )
         // refund 는 멱등이라 이미 돌려준 건이면 null 을 준다. 그때는 현재 잔액을 그대로 쓴다
         val balanceAfter = transaction?.balanceAfter ?: coinService.balanceOf(userId)

@@ -129,6 +129,11 @@ class CoinChargeIntegrationTest : IntegrationTestSupport() {
         confirm(chargeId)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.method").value("KAKAOPAY"))
+
+        // 내역 문구도 그 수단으로 — C-02-9 "카카오페이 충전". 주문 번호는 보이지 않는다
+        val latest = coins().get("lastTransaction")
+        assertThat(latest.get("description").asText()).isEqualTo("카카오페이 충전")
+        assertThat(latest.get("refType").asText()).isEqualTo("COIN_CHARGE")
     }
 
     @Test
@@ -176,6 +181,8 @@ class CoinChargeIntegrationTest : IntegrationTestSupport() {
         val latest = coins().get("lastTransaction")
         assertThat(latest.get("type").asText()).isEqualTo("CHARGE")
         assertThat(latest.get("amount").asInt()).isEqualTo(10_000)
+        // 포트원이 수단을 안 주면 요청 때 고른 수단(CARD)이 그대로 문구가 된다
+        assertThat(latest.get("description").asText()).isEqualTo("카드 충전")
     }
 
     @Test
