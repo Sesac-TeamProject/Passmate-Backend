@@ -49,6 +49,11 @@ data class QuestionEndedPayload(
     val submitCount: Int,
     val correctCount: Int,
     val correctRate: Double,
+    @field:Schema(
+        description = "직전에 마감된 문항의 정답률과의 차(%p). 1번 문항이거나 앞에 마감된 문항이 없으면 빠진다 " +
+            "— 0 으로 두면 화면이 \"변동 없음\"으로 읽는다",
+    )
+    val accuracyDelta: Double? = null,
     @field:Schema(description = "보기별 응답 수. 서술형은 비어 있다")
     val distribution: Map<String, Int>,
 )

@@ -180,6 +180,29 @@ class SessionFlowTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `문항 결과에 직전 문항 대비 정답률 변동이 실린다`() {
+        start()
+        submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+        endCurrent()
+
+        questionResult(guestToken, mcqId)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.correctRate").value(100.0))
+            // 1번 문항은 견줄 직전이 없다 — 0 으로 두면 "변동 없음"과 구분되지 않는다
+            .andExpect(jsonPath("$.accuracyDelta").doesNotExist())
+
+        next()
+        submit(guestToken, essayId, "연결지향 프로토콜입니다").andExpect(status().isCreated)
+        endCurrent()
+
+        // 서술형은 채점 전이라 정답률이 0 이다 — 100%p 떨어진 것으로 나온다
+        questionResult(guestToken, essayId)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.correctRate").value(0.0))
+            .andExpect(jsonPath("$.accuracyDelta").value(-100.0))
+    }
+
+    @Test
     fun `문항 결과의 랭킹에 직전 문항 대비 순위 변동이 실린다`() {
         // 프로젝터 레일이 매 문항 TOP5 를 "변동 없음"으로만 말하던 자리(웹 QA_BACKLOG B-17)
         val guest2 = participantService.join(roomId, null, JoinRoomRequest(nickname = "게스트2")).accessToken!!

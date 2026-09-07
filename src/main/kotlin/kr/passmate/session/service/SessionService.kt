@@ -193,6 +193,8 @@ class SessionService(
         val stat = roomStateRepository.findSubmissionStat(sq.id)
         sq.end(stat.submitCount, stat.correctCount, stat.distribution)
         val question = questions.firstOrNull { it.id == sq.questionId }
+        // 마감으로 correctRate 가 정해진 뒤에야 견줄 수 있다. 자기 자신은 orderNo 로 걸러진다
+        val accuracyDelta = sessionQueryService.accuracyDeltaOf(sq)
 
         eventPublisher.toRoom(
             sq.roomId,
@@ -206,6 +208,7 @@ class SessionService(
                 submitCount = sq.submitCount,
                 correctCount = sq.correctCount,
                 correctRate = sq.correctRate?.toDouble() ?: 0.0,
+                accuracyDelta = accuracyDelta,
                 distribution = stat.distribution,
             ),
         )

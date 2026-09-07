@@ -105,6 +105,19 @@ class SessionQueryService(
     fun sessionQuestions(roomId: Long): List<SessionQuestion> =
         sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(roomId)
 
+    /**
+     * [sq] 의 정답률이 **직전에 마감된 문항**보다 얼마나 오르내렸는지(%p, 웹 QA_BACKLOG B-17).
+     *
+     * 호스트가 문항을 건너뛸 수 있어 orderNo - 1 이 아니라 "앞쪽에서 마감된 것 중 가장 뒤"와 견준다.
+     * 견줄 문항이 없으면 null 이다 — 0 은 "변동 없음"이라는 뜻이라 구분되어야 한다.
+     */
+    fun accuracyDeltaOf(sq: SessionQuestion): Double? {
+        val previous = sessionQuestions(sq.roomId)
+            .filter { it.orderNo < sq.orderNo && it.isEnded }
+            .maxByOrNull { it.orderNo }
+            ?: return null
+        return (sq.correctRate ?: return null).toDouble() - (previous.correctRate ?: return null).toDouble()
+    }
 
     fun findSessionQuestion(roomId: Long, questionId: Long): SessionQuestion =
         sessionQuestionRepository.findByRoomIdAndQuestionId(roomId, questionId)
@@ -186,6 +199,7 @@ class SessionQueryService(
             submitCount = sq.submitCount,
             correctCount = sq.correctCount,
             correctRate = sq.correctRate?.toDouble() ?: 0.0,
+            accuracyDelta = accuracyDeltaOf(sq),
             distribution = sq.answerDistribution.orEmpty(),
             ranking = rankingAsOf(roomId, sq.orderNo),
         )

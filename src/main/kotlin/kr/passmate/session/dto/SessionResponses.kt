@@ -53,6 +53,8 @@ data class QuestionResultResponse(
     val submitCount: Int,
     val correctCount: Int,
     val correctRate: Double,
+    @field:Schema(description = "직전에 마감된 문항의 정답률과의 차(%p). 앞에 마감된 문항이 없으면 빠진다")
+    val accuracyDelta: Double?,
     val distribution: Map<String, Int>,
     val ranking: List<RankingEntry>,
 )
