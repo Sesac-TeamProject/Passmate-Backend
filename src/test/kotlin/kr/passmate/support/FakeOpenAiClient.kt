@@ -13,7 +13,7 @@ import kr.passmate.question.domain.QuestionType
  * 테스트용 OpenAI 클라이언트. **네트워크를 타지 않으므로 요금이 발생하지 않는다.**
  *
  * 기본은 요청한 유형·개수 그대로 그럴듯한 문항을 만들어 준다.
- * `failTimes` 로 앞선 n 번을 실패시켜 재시도 동작을 확인한다.
+ * `failTimes` 로 앞선 n 번을, `failOnCalls` 로 특정 회차를 실패시켜 재시도 동작을 확인한다.
  */
 class FakeOpenAiClient : OpenAiClient {
 
@@ -24,8 +24,10 @@ class FakeOpenAiClient : OpenAiClient {
     var callCount: Int = 0
         private set
 
-    var lastRequest: AiGenerationRequest? = null
-        private set
+    /** 생성 호출에 들어온 요청 전부(호출 순). 유형별 분할 호출을 검증할 때 쓴다 */
+    val requests: MutableList<AiGenerationRequest> = mutableListOf()
+
+    val lastRequest: AiGenerationRequest? get() = requests.lastOrNull()
 
     /** 서술형 분석 호출 횟수. 자동 실행이 아니라 요청할 때만 도는지 세는 데 쓴다 */
     var analysisCallCount: Int = 0
@@ -35,6 +37,7 @@ class FakeOpenAiClient : OpenAiClient {
         private set
 
     private var failuresLeft: Int = 0
+    private var failingCalls: Set<Int> = emptySet()
     private var failureRetryable: Boolean = true
     private var scripted: List<GeneratedQuestion>? = null
     private var analysisFailuresLeft: Int = 0
@@ -43,6 +46,12 @@ class FakeOpenAiClient : OpenAiClient {
     /** 앞선 [times] 번 호출을 실패시킨다. [retryable] = false 면 재시도 대상이 아니다. */
     fun failTimes(times: Int, retryable: Boolean = true) {
         failuresLeft = times
+        failureRetryable = retryable
+    }
+
+    /** [callNumbers] 번째(1부터) 호출만 실패시킨다. 뒤 유형 호출만 떨어뜨릴 때 쓴다. */
+    fun failOnCalls(vararg callNumbers: Int, retryable: Boolean = true) {
+        failingCalls = callNumbers.toSet()
         failureRetryable = retryable
     }
 
@@ -59,8 +68,9 @@ class FakeOpenAiClient : OpenAiClient {
 
     fun reset() {
         callCount = 0
-        lastRequest = null
+        requests.clear()
         failuresLeft = 0
+        failingCalls = emptySet()
         failureRetryable = true
         scripted = null
         analysisCallCount = 0
@@ -91,10 +101,10 @@ class FakeOpenAiClient : OpenAiClient {
 
     override fun generateQuestions(request: AiGenerationRequest): AiGenerationResult {
         callCount++
-        lastRequest = request
+        requests += request
 
-        if (failuresLeft > 0) {
-            failuresLeft--
+        if (failuresLeft > 0 || callCount in failingCalls) {
+            if (failuresLeft > 0) failuresLeft--
             throw AiCallException("테스트용 실패", retryable = failureRetryable)
         }
 
