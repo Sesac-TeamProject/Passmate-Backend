@@ -16,6 +16,17 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 /**
+ * AI 생성 무료 한도의 현재 상태. 화면이 한도를 복제하지 않게 셋을 함께 준다(웹 QA_BACKLOG B-7).
+ */
+data class AiQuota(
+    val freeLimit: Int,
+    val usedCount: Int,
+) {
+    /** 한도를 넘겨도 0 아래로 내려가지 않는다 — 화면이 "-1회 남음"을 그리지 않게 */
+    val remainingCount: Int get() = (freeLimit - usedCount).coerceAtLeast(0)
+}
+
+/**
  * AI 문항 생성. 무료 한도를 지키고, 형식 오류는 1회 재시도하고, 결과를 로그로 남긴다.
  *
  * **트랜잭션을 열지 않는다.** OpenAI 호출은 수십 초가 걸릴 수 있어 그 시간만큼 커넥션을 쥐고 있으면
@@ -46,9 +57,9 @@ class AiQuestionService(
         return call(userId, setId, AiGenerationKind.REGENERATE, request).first()
     }
 
-    /** 남은 무료 횟수. 화면에 "AI 생성 n회 남음"을 띄우는 데 쓴다. 생성·재생성을 합친 값이다. */
-    fun remainingFreeCount(userId: Long): Int =
-        (policy.aiFreeLimit - successCount(userId)).coerceAtLeast(0)
+    /** 화면에 "AI 생성 n회 남음"을 띄우는 데 쓴다. 생성·재생성을 합쳐 센다. */
+    fun freeQuota(userId: Long): AiQuota =
+        AiQuota(freeLimit = policy.aiFreeLimit, usedCount = successCount(userId))
 
     private fun verifyFreeLimit(userId: Long) {
         if (successCount(userId) >= policy.aiFreeLimit) {

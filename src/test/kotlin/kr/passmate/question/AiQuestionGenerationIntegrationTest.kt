@@ -93,6 +93,47 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `남은 무료 생성 횟수를 조회한다 — 화면이 한도를 복제하지 않게`() {
+        // 프론트가 AI_FREE_LIMIT = 5 를 화면에 박아 두고 있어, 정책값이 바뀌면 조용히 거짓말이 된다(웹 QA_BACKLOG B-7)
+        quota(ownerToken)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.freeLimit").value(policy.aiFreeLimit))
+            .andExpect(jsonPath("$.usedCount").value(0))
+            .andExpect(jsonPath("$.remainingCount").value(policy.aiFreeLimit))
+
+        val setId = createSet()
+        generate(setId, """{"topic":"주제","counts":{"OX":1}}""").andExpect(status().isCreated)
+
+        quota(ownerToken)
+            .andExpect(jsonPath("$.usedCount").value(1))
+            .andExpect(jsonPath("$.remainingCount").value(policy.aiFreeLimit - 1))
+    }
+
+    @Test
+    fun `실패한 생성은 남은 횟수를 깎지 않고 소진되면 0 이다`() {
+        val setId = createSet()
+        fake.failTimes(2)
+        generate(setId, """{"topic":"주제","counts":{"OX":1}}""").andExpect(status().isBadGateway)
+
+        quota(ownerToken).andExpect(jsonPath("$.remainingCount").value(policy.aiFreeLimit))
+
+        fake.reset()
+        repeat(policy.aiFreeLimit) {
+            generate(setId, """{"topic":"주제 $it","counts":{"OX":1}}""").andExpect(status().isCreated)
+        }
+
+        // 한도를 넘겨도 음수로 내려가지 않는다 — 화면이 "-1회 남음"을 그리지 않게
+        quota(ownerToken)
+            .andExpect(jsonPath("$.usedCount").value(policy.aiFreeLimit))
+            .andExpect(jsonPath("$.remainingCount").value(0))
+    }
+
+    @Test
+    fun `잔여 횟수는 회원만 조회한다`() {
+        mockMvc.perform(get("/users/me/ai-quota")).andExpect(status().isUnauthorized)
+    }
+
+    @Test
     fun `유형이 섞인 요청은 유형별로 나눠 호출하고 무료 횟수는 한 번만 센다`() {
         val setId = createSet()
 
@@ -330,6 +371,9 @@ class AiQuestionGenerationIntegrationTest : IntegrationTestSupport() {
                 .header("Authorization", "Bearer $ownerToken")
                 .contentType(MediaType.APPLICATION_JSON).content(body),
         )
+
+    private fun quota(token: String): ResultActions =
+        mockMvc.perform(get("/users/me/ai-quota").header("Authorization", "Bearer $token"))
 
     private fun questionsOf(setId: Long): List<JsonNode> =
         mockMvc.perform(get("/question-sets/{id}", setId).header("Authorization", "Bearer $ownerToken"))
