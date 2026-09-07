@@ -25,7 +25,10 @@ data class CoinTransactionRow(
     @field:Schema(description = "가리키는 대상 종류. 영수증으로 이어갈 때 쓴다")
     val refType: CoinRefType?,
     val refId: Long?,
-    @field:Schema(description = "내역에 보일 설명. 방 제목·결제 번호가 여기 들어 있다")
+    @field:Schema(
+        description = "내역에 그대로 보일 문구(C-02-9) — \"카카오페이 충전\" · \"{방 제목} 참가비\" · \"{방 제목} 참가비 환급\". " +
+            "주문·결제 번호는 넣지 않는다. 영수증으로 이어갈 때는 refType·refId 를 쓴다",
+    )
     val description: String?,
     val createdAt: LocalDateTime,
 ) {
