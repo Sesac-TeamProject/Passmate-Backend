@@ -56,6 +56,12 @@ enum class ErrorCode(val status: HttpStatus, val message: String) {
     RATING_WINDOW_CLOSED(HttpStatus.CONFLICT, "평가 가능 기간이 지났습니다."),
     GUEST_RECORD_EXPIRED(HttpStatus.CONFLICT, "보관 기한이 지나 기록이 파기되었습니다."),
     GUEST_RECORD_ALREADY_CLAIMED(HttpStatus.CONFLICT, "이미 계정에 연동된 기록입니다."),
+
+    /**
+     * 같은 방에 회원으로도 들어갔던 경우. **되풀이해도 결과가 같은 종결 상태**라 전용 코드를 준다 —
+     * 일반 CONFLICT 로 주면 클라이언트가 일시 실패로 보고 결과 화면을 열 때마다 다시 시도한다(웹 QA_BACKLOG B-15).
+     */
+    GUEST_RECORD_MEMBER_ALREADY_JOINED(HttpStatus.CONFLICT, "이미 회원으로 참여한 방입니다."),
     ALREADY_PAID(HttpStatus.CONFLICT, "이미 참가비를 결제한 방입니다."),
     PAYMENT_NOT_COMPLETED(HttpStatus.CONFLICT, "아직 결제가 완료되지 않았습니다."),
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.CONFLICT, "결제 금액이 요청 금액과 일치하지 않습니다."),

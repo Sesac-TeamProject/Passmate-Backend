@@ -157,7 +157,8 @@ class GuestClaimIntegrationTest : IntegrationTestSupport() {
 
         claim(newMemberToken, guestToken)
             .andExpect(status().isConflict)
-            .andExpect(jsonPath("$.code").value("CONFLICT"))
+            // 되풀이해도 결과가 같은 종결 상태라 전용 코드다 — 일반 CONFLICT 면 클라이언트가 계속 재시도한다(B-15)
+            .andExpect(jsonPath("$.code").value("GUEST_RECORD_MEMBER_ALREADY_JOINED"))
     }
 
     @Test
