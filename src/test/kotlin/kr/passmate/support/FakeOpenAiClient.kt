@@ -36,6 +36,9 @@ class FakeOpenAiClient : OpenAiClient {
     var lastAnalysisRequest: EssayAnalysisRequest? = null
         private set
 
+    /** 호출 직후 실행할 훅. "호출과 저장 사이"에 끼어드는 상황을 만들 때 쓴다 */
+    var onCall: (() -> Unit)? = null
+
     private var failuresLeft: Int = 0
     private var failingCalls: Set<Int> = emptySet()
     private var failureRetryable: Boolean = true
@@ -68,6 +71,7 @@ class FakeOpenAiClient : OpenAiClient {
 
     fun reset() {
         callCount = 0
+        onCall = null
         requests.clear()
         failuresLeft = 0
         failingCalls = emptySet()
@@ -102,6 +106,7 @@ class FakeOpenAiClient : OpenAiClient {
     override fun generateQuestions(request: AiGenerationRequest): AiGenerationResult {
         callCount++
         requests += request
+        onCall?.invoke()
 
         if (failuresLeft > 0 || callCount in failingCalls) {
             if (failuresLeft > 0) failuresLeft--

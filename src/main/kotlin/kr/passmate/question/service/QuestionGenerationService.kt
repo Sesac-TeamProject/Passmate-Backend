@@ -29,7 +29,7 @@ class QuestionGenerationService(
         val (_, existing) = questionSetQueryService.getEditableDetail(setId, ownerUserId)
 
         // 2) 트랜잭션 밖 외부 호출
-        val generated = aiQuestionService.generateForSet(
+        val outcome = aiQuestionService.generateForSet(
             userId = ownerUserId,
             setId = setId,
             request = AiGenerationRequest(
@@ -41,15 +41,18 @@ class QuestionGenerationService(
             ),
         )
 
-        // 3) 짧은 쓰기 트랜잭션
-        return questionSetService.appendGeneratedQuestions(
-            setId = setId,
-            ownerUserId = ownerUserId,
-            generated = generated,
-            topic = request.topic,
-            timeLimitSec = request.timeLimitSec,
-            points = request.points,
-        )
+        // 3) 짧은 쓰기 트랜잭션. 이 사이 세트가 확정·삭제되면 여기서 떨어지는데,
+        //    그때 성공 기록을 남겨 두면 문항은 못 받고 무료 횟수만 깎인다 — 기록을 무효로 돌린다
+        return saveOrVoid(outcome.logId) {
+            questionSetService.appendGeneratedQuestions(
+                setId = setId,
+                ownerUserId = ownerUserId,
+                generated = outcome.questions,
+                topic = request.topic,
+                timeLimitSec = request.timeLimitSec,
+                points = request.points,
+            )
+        }
     }
 
     /**
@@ -61,7 +64,7 @@ class QuestionGenerationService(
         val target = existing.find { it.id == questionId }
             ?: throw BusinessException(ErrorCode.QUESTION_NOT_FOUND)
 
-        val generated = aiQuestionService.regenerate(
+        val outcome = aiQuestionService.regenerate(
             userId = ownerUserId,
             setId = setId,
             request = AiGenerationRequest(
@@ -73,6 +76,18 @@ class QuestionGenerationService(
             ),
         )
 
-        return questionSetService.replaceWithGeneratedQuestion(setId, questionId, ownerUserId, generated)
+        return saveOrVoid(outcome.logId) {
+            questionSetService.replaceWithGeneratedQuestion(setId, questionId, ownerUserId, outcome.questions.first())
+        }
     }
+
+    /**
+     * 저장이 실패하면 그 호출의 성공 기록을 무효로 돌리고 원래 오류를 그대로 올린다.
+     * 무료 횟수는 **문항을 실제로 받았을 때만** 깎여야 한다.
+     */
+    private fun <T> saveOrVoid(logId: Long, save: () -> T): T =
+        runCatching(save).getOrElse { e ->
+            aiQuestionService.voidGeneration(logId, "생성은 됐지만 저장에 실패했습니다: ${e.message}")
+            throw e
+        }
 }
