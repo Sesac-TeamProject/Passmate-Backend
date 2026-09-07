@@ -149,7 +149,11 @@ class AiQuestionService(
 
         for (attempt in 0..MAX_RETRY) {
             try {
-                return openAiClient.generateQuestions(request) to attempt
+                val result = openAiClient.generateQuestions(request)
+                // 결과 검증의 관문은 클라이언트 구현이 아니라 여기다 — 어떤 클라이언트(Fake 포함)가 와도
+                // 형식이 어긋나면 같은 재시도 경로를 탄다. HTTP 클라이언트의 자체 검증은 방어선으로 남긴다
+                result.questions.forEach { it.verifyConsistent() }
+                return result to attempt
             } catch (e: AiCallException) {
                 lastError = e
                 log.warn(

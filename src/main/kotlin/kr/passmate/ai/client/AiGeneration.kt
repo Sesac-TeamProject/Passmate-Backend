@@ -75,16 +75,25 @@ data class GeneratedQuestion(
                     throw AiCallException("OX 정답이 O/X 가 아닙니다.", retryable = true)
                 }
 
-            QuestionType.ESSAY ->
+            QuestionType.ESSAY -> {
                 if (answer.isBlank()) {
                     throw AiCallException("서술형 모범답안이 비어 있습니다.", retryable = true)
                 }
+                // 모델이 모범답안을 content 에도 그대로 써 보내는 경우가 있다(2026-09-08, 세트 6 두 건).
+                // 문제와 답이 같으면 학생에게 답을 보여주는 셈이라 형식 오류로 취급해 재시도한다
+                if (normalized(content) == normalized(answer)) {
+                    throw AiCallException("서술형 문항 지문과 모범답안이 같습니다.", retryable = true)
+                }
+            }
         }
     }
+
+    private fun normalized(text: String): String = text.trim().replace(WHITESPACE, " ")
 
     private companion object {
         const val REQUIRED_CHOICES = 4
         val OX_ANSWERS = setOf("O", "X")
+        val WHITESPACE = Regex("\\s+")
     }
 }
 
