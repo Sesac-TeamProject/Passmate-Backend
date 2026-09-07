@@ -209,7 +209,12 @@ class SessionService(
                 distribution = stat.distribution,
             ),
         )
-        eventPublisher.toRoom(sq.roomId, SessionEventType.RANKING_UPDATED, sessionQueryService.ranking(sq.roomId))
+        // 마감 직후 랭킹에는 직전 문항 대비 순위 변동이 함께 실린다(웹 QA_BACKLOG B-17)
+        eventPublisher.toRoom(
+            sq.roomId,
+            SessionEventType.RANKING_UPDATED,
+            sessionQueryService.rankingAsOf(sq.roomId, sq.orderNo),
+        )
     }
 
     /**

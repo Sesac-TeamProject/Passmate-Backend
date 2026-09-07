@@ -60,6 +60,12 @@ data class RankingEntry(
     val nickname: String,
     val avatarId: String,
     val totalScore: Long,
+    @field:Schema(
+        description = "직전 문항 마감 시점 대비 순위 변동. 양수면 올라갔다. " +
+            "문항 마감 맥락(QUESTION_ENDED 직후 랭킹·문항 결과)에서만 실리고, " +
+            "1번 문항이거나 그때 점수가 없던 참가자는 빠진다 — 0 으로 두면 화면이 \"변동 없음\"으로 읽는다",
+    )
+    val rankChange: Int? = null,
 )
 
 @Schema(description = "제출 현황 — 호스트 전용")

@@ -26,5 +26,11 @@ interface RoomStateRepository {
     /** 누적 점수 내림차순. 동점이면 participantId 오름차순으로 안정 정렬한다. */
     fun findRanking(roomId: Long): List<ParticipantScore>
 
+    /**
+     * [upToOrderNo] 번 문항까지만 합산한 랭킹. 순위 변동을 내려면 직전 문항 시점이 필요하다.
+     * 0 이하를 주면 빈 목록이다 — 1번 문항에는 견줄 직전이 없다.
+     */
+    fun findRankingAsOf(roomId: Long, upToOrderNo: Int): List<ParticipantScore>
+
     fun findSubmissionStat(sessionQuestionId: Long): SubmissionStat
 }
