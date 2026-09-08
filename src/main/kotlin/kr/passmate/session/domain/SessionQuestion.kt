@@ -38,6 +38,10 @@ class SessionQuestion(
 
     @Column(name = "time_limit_sec", nullable = false, updatable = false)
     val timeLimitSec: Int,
+
+    /** 시간 만료로 마감되면 다음 문항을 자동 개시할지. 세션 시작 시 방 설정(W-02b)에서 복사된다 */
+    @Column(name = "auto_advance", nullable = false, updatable = false)
+    val autoAdvance: Boolean = false,
 ) : BaseCreatedEntity() {
 
     @Id

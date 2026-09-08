@@ -81,11 +81,70 @@ class RoomTest {
         assertThat(room.participantCount).isZero()
     }
 
-    private fun room(maxParticipants: Int? = null) = Room(
+    // ---------- 문항별 시간 오버라이드 (W-02b, 웹 버그 리포트 B-18) ----------
+
+    @Test
+    fun `덮어쓴 시간이 없는 문항은 세트 기본값을 쓴다`() {
+        val room = room().apply { overrideQuestionTimes(mapOf(1L to 20)) }
+
+        assertThat(room.timeLimitSecOf(1L, 30)).isEqualTo(20)
+        assertThat(room.timeLimitSecOf(2L, 30)).isEqualTo(30)
+        assertThat(room.hasTimeOverride(1L)).isTrue()
+        assertThat(room.hasTimeOverride(2L)).isFalse()
+    }
+
+    @Test
+    fun `빈 맵으로 덮어쓰면 전부 기본값으로 돌아간다`() {
+        val room = room().apply { overrideQuestionTimes(mapOf(1L to 20)) }
+
+        room.overrideQuestionTimes(emptyMap())
+
+        assertThat(room.questionTimeOverrides).isNull()
+        assertThat(room.timeLimitSecOf(1L, 30)).isEqualTo(30)
+    }
+
+    @Test
+    fun `자동 넘김은 켠 문항만 참이고 세트를 바꾸면 함께 비워진다`() {
+        val room = room(questionSetId = 10L)
+        room.overrideQuestionTimes(mapOf(1L to 20), autoAdvance = listOf(1L, 3L))
+
+        assertThat(room.isAutoAdvance(1L)).isTrue()
+        assertThat(room.isAutoAdvance(2L)).isFalse()
+
+        room.update("제목", null, null, 11L, null, false, null)
+        assertThat(room.questionAutoAdvance).isNull()
+        assertThat(room.isAutoAdvance(1L)).isFalse()
+    }
+
+    @Test
+    fun `문항별 시간은 대기 중일 때만 덮어쓸 수 있다`() {
+        val room = room().apply { start() }
+
+        assertThatThrownBy { room.overrideQuestionTimes(mapOf(1L to 20)) }
+            .isInstanceOf(BusinessException::class.java)
+            .extracting { (it as BusinessException).errorCode }
+            .isEqualTo(ErrorCode.CONFLICT)
+    }
+
+    @Test
+    fun `세트를 바꾸면 덮어쓴 시간이 비워지고 같은 세트면 남는다`() {
+        val room = room(questionSetId = 10L).apply { overrideQuestionTimes(mapOf(1L to 20)) }
+
+        // 같은 세트로 다른 항목만 고치면 시간은 그대로다
+        room.update("제목", null, null, 10L, null, false, null)
+        assertThat(room.questionTimeOverrides).containsEntry(1L, 20)
+
+        // 예전 세트의 문항 id 를 가리키던 값은 의미가 없다
+        room.update("제목", null, null, 11L, null, false, null)
+        assertThat(room.questionTimeOverrides).isNull()
+    }
+
+    private fun room(maxParticipants: Int? = null, questionSetId: Long? = null) = Room(
         hostUserId = 1L,
         pin = "123456",
         type = RoomType.FREE,
         title = "CS 면접 대비",
+        questionSetId = questionSetId,
         maxParticipants = maxParticipants,
     )
 }

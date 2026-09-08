@@ -31,10 +31,10 @@ data class AiGenerateRequest(
     @field:Size(max = MATERIAL_MAX_LENGTH, message = "강의자료는 ${MATERIAL_MAX_LENGTH}자를 넘을 수 없습니다.")
     val material: String? = null,
 
-    @field:Schema(description = "생성될 문항의 제한시간(초). 5~600")
+    @field:Schema(description = "생성될 문항의 제한시간(초). 5~600. 생략하면 유형별 기본 — 객관식·OX 30초, 서술형 90초. 넣으면 전 문항에 그 값")
     @field:Min(5)
     @field:Max(600)
-    val timeLimitSec: Int = QuestionRequest.DEFAULT_TIME_LIMIT_SEC,
+    val timeLimitSec: Int? = null,
 
     @field:Schema(description = "생성될 문항의 배점. 1~1000")
     @field:Min(1)

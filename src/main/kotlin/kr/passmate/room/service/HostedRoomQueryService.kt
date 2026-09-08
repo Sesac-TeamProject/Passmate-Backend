@@ -31,16 +31,19 @@ class HostedRoomQueryService(
 
     fun getHostedRooms(hostUserId: Long): HostedRoomsResponse {
         val rooms = roomRepository.findAllByHostUserIdOrderByIdDesc(hostUserId)
-        val (ended, active) = rooms.partition { it.status == RoomStatus.ENDED }
+        // 종료 여부가 아니라 isActive 로 가른다 — 취소된 방이 진행 중에 섞이면
+        // "진행 중인 방 열기"가 취소된 방을 연다. 취소는 종료 목록에 status 로 담는다(W-09·M-13 결정)
+        val (active, finished) = rooms.partition { it.status.isActive }
 
         val ratings = roomRatingQueryService.starsOfHost(hostUserId)
         // 세션을 한 번도 안 한 회원은 프로필이 없다 — 그때는 등급 자리를 비워 둔다
         val grade = hostGradeQueryService.findProfile(hostUserId)
             ?.let { hostGradeQueryService.toResponse(it) }
         val stats = roomStatsService.getUserRoomStats(hostUserId)
-        // 종료된 방만 학생 수를 세면 된다 — 진행 중인 방은 room.participantCount 가 곧 현재 인원이다
+        // 정상 종료된 방만 학생 수를 센다 — 진행 중인 방은 room.participantCount 가 곧 현재 인원이고,
+        // 취소된 방은 대기실까지 들어온 사람이 있어도 "학생 1명"으로 읽히면 안 된다(세션이 없었다)
         val studentCounts = participantRepository
-            .countByRoomIds(ended.map { it.id })
+            .countByRoomIds(finished.filter { it.status == RoomStatus.ENDED }.map { it.id })
             .associate { it.roomId to it.count }
 
         return HostedRoomsResponse(
@@ -54,10 +57,11 @@ class HostedRoomQueryService(
                 ratingCount = ratings.totalCount,
             ),
             active = active.map { it.toActive() },
-            ended = ended.map { room ->
+            ended = finished.map { room ->
                 EndedHostedRoom(
                     roomId = room.id,
                     title = room.title,
+                    status = room.status,
                     endedAt = room.endedAt,
                     studentCount = studentCounts[room.id] ?: 0L,
                     correctRate = room.correctRate?.toDouble(),

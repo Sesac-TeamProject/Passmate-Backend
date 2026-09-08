@@ -2,6 +2,7 @@ package kr.passmate.ai.service
 
 import kr.passmate.ai.client.AiCallException
 import kr.passmate.ai.client.AiGenerationRequest
+import kr.passmate.ai.client.AiGenerationResult
 import kr.passmate.ai.client.GeneratedQuestion
 import kr.passmate.ai.client.OpenAiClient
 import kr.passmate.ai.domain.AiGenerationKind
@@ -13,6 +14,26 @@ import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+
+/**
+ * AI 생성 무료 한도의 현재 상태. 화면이 한도를 복제하지 않게 셋을 함께 준다(웹 QA_BACKLOG B-7).
+ */
+data class AiQuota(
+    val freeLimit: Int,
+    val usedCount: Int,
+) {
+    /** 한도를 넘겨도 0 아래로 내려가지 않는다 — 화면이 "-1회 남음"을 그리지 않게 */
+    val remainingCount: Int get() = (freeLimit - usedCount).coerceAtLeast(0)
+}
+
+/**
+ * AI 생성 결과 + 그 호출의 로그 id. 호출자가 **결과를 쓰지 못했을 때** 로그를 무효로 돌리기 위해 id 를 함께 준다.
+ */
+data class AiGenerationOutcome(
+    val questions: List<GeneratedQuestion>,
+    val logId: Long,
+)
 
 /**
  * AI 문항 생성. 무료 한도를 지키고, 형식 오류는 1회 재시도하고, 결과를 로그로 남긴다.
@@ -30,7 +51,7 @@ class AiQuestionService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /** 세트에 붙일 문항 여러 개. */
-    fun generateForSet(userId: Long, setId: Long, request: AiGenerationRequest): List<GeneratedQuestion> {
+    fun generateForSet(userId: Long, setId: Long, request: AiGenerationRequest): AiGenerationOutcome {
         verifyFreeLimit(userId)
         return call(userId, setId, AiGenerationKind.SET, request)
     }
@@ -40,14 +61,23 @@ class AiQuestionService(
      * **재생성도 무료 한도를 깎는다** — 문항 수가 적을 뿐 AI 를 한 번 더 부르는 것은 같다.
      * 한도를 두지 않으면 재생성 버튼이 곧 무제한 유료 호출이 된다.
      */
-    fun regenerate(userId: Long, setId: Long, request: AiGenerationRequest): GeneratedQuestion {
+    fun regenerate(userId: Long, setId: Long, request: AiGenerationRequest): AiGenerationOutcome {
         verifyFreeLimit(userId)
-        return call(userId, setId, AiGenerationKind.REGENERATE, request).first()
+        return call(userId, setId, AiGenerationKind.REGENERATE, request)
     }
 
-    /** 남은 무료 횟수. 화면에 "AI 생성 n회 남음"을 띄우는 데 쓴다. 생성·재생성을 합친 값이다. */
-    fun remainingFreeCount(userId: Long): Int =
-        (policy.aiFreeLimit - successCount(userId)).coerceAtLeast(0)
+    /**
+     * 호출은 성공했는데 **결과를 쓰지 못했을 때** 그 기록을 무효로 돌린다 — 무료 횟수가 복구된다.
+     * 저장 실패는 사용자 잘못이 아니고 문항도 못 받았으니 횟수를 깎아 둘 이유가 없다.
+     */
+    @Transactional
+    fun voidGeneration(logId: Long, reason: String) {
+        logRepository.findById(logId).orElse(null)?.void(reason)
+    }
+
+    /** 화면에 "AI 생성 n회 남음"을 띄우는 데 쓴다. 생성·재생성을 합쳐 센다. */
+    fun freeQuota(userId: Long): AiQuota =
+        AiQuota(freeLimit = policy.aiFreeLimit, usedCount = successCount(userId))
 
     private fun verifyFreeLimit(userId: Long) {
         if (successCount(userId) >= policy.aiFreeLimit) {
@@ -63,33 +93,77 @@ class AiQuestionService(
         logRepository.countByUserIdAndStatus(userId, AiGenerationStatus.SUCCESS).toInt()
 
     /**
-     * 호출 → 실패하면 재시도 가능한 것만 **한 번 더** → 그래도 안 되면 502.
+     * 유형별로 나눠 호출한다 — 한 호출에 유형을 섞으면 모델이 분포를 지키지 않아
+     * 재시도까지 같은 이유로 떨어졌다(웹 버그 리포트 B-23). 각 호출은 실패하면
+     * 재시도 가능한 것만 **한 번 더** 걸고, 그래도 안 되면 전체를 502 로 끝낸다.
+     *
+     * 사용자 액션은 하나라 로그도 한 줄, 무료 횟수도 한 번이다.
+     * 앞 유형이 성공하고 뒤 유형이 실패하면 **앞 결과도 버린다** —
+     * 절반만 붙이면 "객관식 5·서술형 3"을 약속한 화면과 어긋난다.
      * 실패는 SUCCESS 로 기록되지 않으므로 무료 횟수가 깎이지 않는다.
-     * 재시도 1회는 같은 요청의 연장이라 한도를 두 번 깎지 않는다 — 로그도 한 줄만 남는다.
      */
     private fun call(
         userId: Long,
         setId: Long,
         kind: AiGenerationKind,
         request: AiGenerationRequest,
-    ): List<GeneratedQuestion> {
+    ): AiGenerationOutcome {
+        val parts = request.splitByType()
+        if (parts.isEmpty()) throw BusinessException(ErrorCode.INVALID_INPUT, "생성할 문항 수가 없습니다.")
+
+        val questions = mutableListOf<GeneratedQuestion>()
+        var model: String? = null
+        var durationMs = 0
+        var retryCount = 0
+
+        try {
+            for (part in parts) {
+                // 앞 유형에서 만든 문항도 피할 목록에 넣는다 — 유형만 다른 같은 문제가 나오지 않게
+                val (result, retries) = callWithRetry(setId, kind, part.copy(avoid = request.avoid + questions.map { it.content }))
+                questions += result.questions
+                model = model ?: result.model
+                durationMs += result.durationMs
+                retryCount += retries
+            }
+        } catch (e: AiCallException) {
+            val retriesOfFailedPart = if (e.retryable) MAX_RETRY else 0
+            save(userId, setId, kind, request, AiGenerationStatus.FAILED, retryCount + retriesOfFailedPart, e.message, null, null)
+            throw BusinessException(ErrorCode.AI_GENERATION_FAILED, cause = e)
+        }
+
+        val log = save(userId, setId, kind, request, AiGenerationStatus.SUCCESS, retryCount, null, model, durationMs)
+        return AiGenerationOutcome(questions, log.id)
+    }
+
+    /**
+     * 유형 하나짜리 호출. 재시도 1회는 같은 요청의 연장이라 한도를 두 번 깎지 않는다.
+     * 끝내 실패하면 마지막 예외를 그대로 던진다 — 재시도 여부는 호출자가 로그에 남긴다.
+     * @return 결과와 그때까지 쓴 재시도 횟수
+     */
+    private fun callWithRetry(
+        setId: Long,
+        kind: AiGenerationKind,
+        request: AiGenerationRequest,
+    ): Pair<AiGenerationResult, Int> {
         var lastError: AiCallException? = null
 
         for (attempt in 0..MAX_RETRY) {
             try {
                 val result = openAiClient.generateQuestions(request)
-                save(userId, setId, kind, request, AiGenerationStatus.SUCCESS, attempt, null, result.model, result.durationMs)
-                return result.questions
+                // 결과 검증의 관문은 클라이언트 구현이 아니라 여기다 — 어떤 클라이언트(Fake 포함)가 와도
+                // 형식이 어긋나면 같은 재시도 경로를 탄다. HTTP 클라이언트의 자체 검증은 방어선으로 남긴다
+                result.questions.forEach { it.verifyConsistent() }
+                return result to attempt
             } catch (e: AiCallException) {
                 lastError = e
-                log.warn("AI 생성 실패 setId={} kind={} attempt={} retryable={}", setId, kind, attempt, e.retryable)
+                log.warn(
+                    "AI 생성 실패 setId={} kind={} types={} attempt={} retryable={}",
+                    setId, kind, request.types, attempt, e.retryable,
+                )
                 if (!e.retryable) break
             }
         }
-
-        val retryCount = if (lastError?.retryable == true) MAX_RETRY else 0
-        save(userId, setId, kind, request, AiGenerationStatus.FAILED, retryCount, lastError?.message, null, null)
-        throw BusinessException(ErrorCode.AI_GENERATION_FAILED, cause = lastError)
+        throw checkNotNull(lastError)
     }
 
     private fun save(
@@ -102,7 +176,7 @@ class AiQuestionService(
         errorMessage: String?,
         model: String?,
         durationMs: Int?,
-    ) {
+    ): AiGenerationLog =
         logRepository.save(
             AiGenerationLog(
                 setId = setId,
@@ -121,7 +195,6 @@ class AiQuestionService(
                 durationMs = durationMs,
             ),
         )
-    }
 
     private companion object {
         /** 명세: 형식 오류·생성 실패 시 자동 재시도 1회 (FR-015) */

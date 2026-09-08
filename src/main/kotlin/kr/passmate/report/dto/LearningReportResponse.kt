@@ -23,6 +23,12 @@ data class LearningReportResponse(
     val weakTopics: List<String>,
     @field:Schema(description = "리포트 값에서 규칙으로 뽑은 조언. AI 가 쓰는 글이 아니다")
     val improvementPoints: List<String>,
+    @field:Schema(description = "반 평균 정답률(%). 참가자 전원의 accuracy 평균 — 미제출도 오답으로 센다")
+    val classAvgAccuracy: Double,
+    @field:Schema(description = "1위 정답률(%)")
+    val topAccuracy: Double,
+    @field:Schema(description = "주제별 맞은 수/전체 수. 주제가 없는 문항은 빠진다. 문항 순서대로 처음 나온 주제 순")
+    val topicAccuracy: List<TopicAccuracy>,
     val generatedAt: LocalDateTime,
 ) {
     companion object {
@@ -31,6 +37,9 @@ data class LearningReportResponse(
             roomTitle: String,
             nickname: String,
             report: ParticipantReport,
+            classAvgAccuracy: Double,
+            topAccuracy: Double,
+            topicAccuracy: List<TopicAccuracy>,
         ): LearningReportResponse {
             val weakTopics = report.weakTopics.orEmpty()
             return LearningReportResponse(
@@ -45,6 +54,9 @@ data class LearningReportResponse(
                 finalRank = report.finalRank,
                 weakTopics = weakTopics,
                 improvementPoints = improvementPoints(report.accuracy.toDouble(), weakTopics),
+                classAvgAccuracy = classAvgAccuracy,
+                topAccuracy = topAccuracy,
+                topicAccuracy = topicAccuracy,
                 generatedAt = report.generatedAt,
             )
         }
@@ -73,3 +85,13 @@ data class LearningReportResponse(
         private const val HIGH_ACCURACY = 90.0
     }
 }
+
+/** 주제(개념)별 정답률 한 줄 — "개념별 정답률" 카드. */
+@Schema(description = "주제별 정답률")
+data class TopicAccuracy(
+    val topic: String,
+    val correctCount: Int,
+    val totalCount: Int,
+    @field:Schema(description = "정답률(%). 미제출도 오답으로 센다")
+    val accuracy: Double,
+)

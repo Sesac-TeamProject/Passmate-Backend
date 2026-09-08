@@ -101,6 +101,8 @@ CREATE TABLE room (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   host_user_id BIGINT NOT NULL,
   question_set_id BIGINT NULL,
+  question_time_overrides JSON NULL COMMENT '이 방에서만 쓰는 문항별 제한시간 {questionId: sec}. NULL = 세트 기본값',
+  question_auto_advance JSON NULL COMMENT '자동 넘김을 켠 문항 id 배열. NULL = 전부 꺼짐',
   title VARCHAR(100) NOT NULL,
   description VARCHAR(500) NULL,
   topic VARCHAR(50) NULL COMMENT '주제 태그(백엔드/CS 면접/네트워크 …)',
@@ -134,6 +136,7 @@ CREATE TABLE session_question (
   question_id BIGINT NOT NULL,
   order_no INT NOT NULL,
   time_limit_sec INT NOT NULL,
+  auto_advance BOOLEAN NOT NULL DEFAULT FALSE COMMENT '시간 만료 마감 후 다음 문항 자동 개시. 방 설정에서 복사',
   started_at DATETIME(6) NULL,
   ends_at DATETIME(6) NULL,
   ended_at DATETIME(6) NULL,
@@ -260,6 +263,18 @@ CREATE TABLE ai_feedback (
   CONSTRAINT fk_ai_feedback_answer FOREIGN KEY (answer_id) REFERENCES answer(id),
   CONSTRAINT fk_ai_feedback_user FOREIGN KEY (user_id) REFERENCES `user`(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE session_question_comment (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  session_question_id BIGINT NOT NULL,
+  reviewer_user_id BIGINT NOT NULL,
+  comment TEXT NOT NULL,
+  created_at DATETIME(6) NOT NULL,
+  updated_at DATETIME(6) NULL,
+  UNIQUE KEY uk_sqc_question (session_question_id),
+  CONSTRAINT fk_sqc_sq FOREIGN KEY (session_question_id) REFERENCES session_question(id),
+  CONSTRAINT fk_sqc_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES `user`(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='문항 단위 선생님 코멘트 — 학생 전체 대상(W-07)';
 
 CREATE TABLE teacher_review (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -420,7 +435,7 @@ CREATE TABLE coin_charge (
   user_id BIGINT NOT NULL,
   room_id BIGINT NULL COMMENT '충전 직후 참가비 차감할 방(선택)',
   amount INT NOT NULL COMMENT '충전 코인 = 결제 원화',
-  method VARCHAR(30) NULL COMMENT 'KAKAOPAY/NAVERPAY/TOSSPAY/CARD/BANK_TRANSFER',
+  method VARCHAR(30) NULL COMMENT 'KAKAOPAY/NAVERPAY/TOSSPAY/CARD/BANK_TRANSFER · 확정 시 포트원 조회의 실제 수단으로 기록',
   pg_provider VARCHAR(20) NOT NULL DEFAULT 'PORTONE',
   merchant_uid VARCHAR(64) NOT NULL COMMENT '우리가 발급한 주문 ID(paymentId)',
   pg_payment_id VARCHAR(100) NULL COMMENT '포트원 결제 ID(imp_uid)',

@@ -164,6 +164,28 @@ class QuestionSetIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `객관식 보기가 5개 이상이면 400 으로 막는다`() {
+        val setId = createSet()
+
+        // 프론트가 보기 키를 A·B·C·D 로 고정해 5번째 보기부터 정답을 잃는다(웹 QA_BACKLOG B-16)
+        addQuestion(setId, mcq("보기가 다섯", listOf("가", "나", "다", "라", "마"), "마"))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("INVALID_QUESTION"))
+
+        val questionId = addQuestionId(setId, mcq("보기가 넷", listOf("가", "나", "다", "라"), "가"))
+
+        // 수정 경로도 같은 규칙이다 — 저장한 뒤에 늘리는 길을 남기지 않는다
+        mockMvc.perform(
+            put("/question-sets/{id}/questions/{qid}", setId, questionId)
+                .header("Authorization", "Bearer $ownerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mcq("보기를 늘림", listOf("가", "나", "다", "라", "마"), "가")),
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("INVALID_QUESTION"))
+    }
+
+    @Test
     fun `목록은 내 세트만 나오고 상태로 거를 수 있다`() {
         createSet("초안 세트")
         confirmedSet()

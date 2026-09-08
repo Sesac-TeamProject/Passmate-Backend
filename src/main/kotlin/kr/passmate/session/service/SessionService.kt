@@ -43,6 +43,7 @@ class SessionService(
     /**
      * 세션을 시작한다. 확정된 문제 세트의 문항을 session_question 으로 복사해 두고 1번 문항을 연다.
      * 복사하는 이유: 세트는 여러 방에 재사용되는데 시작·마감 시각과 집계는 방마다 다르다.
+     * 제한시간은 방이 덮어쓴 값(W-02b)이 있으면 그것을, 없으면 세트 값을 복사한다.
      */
     @Transactional
     fun start(roomId: Long, hostUserId: Long) {
@@ -62,7 +63,8 @@ class SessionService(
                     roomId = roomId,
                     questionId = it.id,
                     orderNo = it.orderNo,
-                    timeLimitSec = it.timeLimitSec,
+                    timeLimitSec = room.timeLimitSecOf(it.id, it.timeLimitSec),
+                    autoAdvance = room.isAutoAdvance(it.id),
                 )
             },
         )
@@ -145,6 +147,25 @@ class SessionService(
     }
 
     /**
+     * 자동 넘김(W-02b). 시간 만료로 마감된 문항이 결과 화면을 보여줄 시간을 채우면 다음 문항을 연다.
+     * 서버 권위 타이머가 호출한다. 그 사이 호스트가 직접 넘겼거나 세션이 끝났으면 아무것도 하지 않는다 —
+     * 경합으로 둘이 겹쳐도 SessionQuestion.start() 가 두 번 열리는 것을 막는다.
+     */
+    @Transactional
+    fun advanceByAutoAdvance(sessionQuestionId: Long) {
+        val sq = sessionQuestionRepository.findById(sessionQuestionId).orElse(null) ?: return
+        val room = roomRepository.findById(sq.roomId).orElse(null) ?: return
+        if (room.status != RoomStatus.RUNNING || room.currentQuestionNo != sq.orderNo) return
+
+        val questions = runCatching { questionSetQueryService.getDetail(room.questionSetId!!, room.hostUserId).second }
+            .getOrNull() ?: return
+        val nextOrderNo = sq.orderNo + 1
+        if (questions.none { it.orderNo == nextOrderNo }) return
+
+        openQuestion(room, nextOrderNo, questions)
+    }
+
+    /**
      * 첨삭으로 점수가 바뀌면 방 요약(평균 점수)을 다시 박아 둔다.
      *
      * `room.avg_score` 는 "내가 만든 방" 목록이 방마다 답안을 다시 세지 않으려고 굳혀 둔 값이다.
@@ -192,6 +213,8 @@ class SessionService(
         val stat = roomStateRepository.findSubmissionStat(sq.id)
         sq.end(stat.submitCount, stat.correctCount, stat.distribution)
         val question = questions.firstOrNull { it.id == sq.questionId }
+        // 마감으로 correctRate 가 정해진 뒤에야 견줄 수 있다. 자기 자신은 orderNo 로 걸러진다
+        val accuracyDelta = sessionQueryService.accuracyDeltaOf(sq)
 
         eventPublisher.toRoom(
             sq.roomId,
@@ -205,10 +228,16 @@ class SessionService(
                 submitCount = sq.submitCount,
                 correctCount = sq.correctCount,
                 correctRate = sq.correctRate?.toDouble() ?: 0.0,
+                accuracyDelta = accuracyDelta,
                 distribution = stat.distribution,
             ),
         )
-        eventPublisher.toRoom(sq.roomId, SessionEventType.RANKING_UPDATED, sessionQueryService.ranking(sq.roomId))
+        // 마감 직후 랭킹에는 직전 문항 대비 순위 변동이 함께 실린다(웹 QA_BACKLOG B-17)
+        eventPublisher.toRoom(
+            sq.roomId,
+            SessionEventType.RANKING_UPDATED,
+            sessionQueryService.rankingAsOf(sq.roomId, sq.orderNo),
+        )
     }
 
     /**

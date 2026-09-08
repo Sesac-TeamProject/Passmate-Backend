@@ -2,6 +2,7 @@ package kr.passmate.coin.client
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import kr.passmate.coin.domain.PaymentMethod
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import org.slf4j.LoggerFactory
@@ -70,9 +71,29 @@ class PortOneHttpClient(
             status = PortOnePaymentStatus.from(node.path("status").asText(null)),
             totalAmount = node.path("amount").path("total").asInt(0),
             pgTxId = node.path("pgTxId").asText(null),
+            method = parseMethod(node.path("method")),
             paidAt = node.path("paidAt").asText(null)?.let(::parseTime),
         )
     }
+
+    /**
+     * 실제 결제 수단. 결제창 안에서 고른 수단이 여기 실려 온다 —
+     * 화면 선택 대신 이 값을 기록의 원천으로 쓴다. 모르는 유형은 null(기록 생략)이지
+     * 실패가 아니다 — 수단을 못 읽었다고 확정을 막으면 코인만 못 받는다.
+     */
+    private fun parseMethod(node: com.fasterxml.jackson.databind.JsonNode): PaymentMethod? =
+        when (node.path("type").asText(null)) {
+            "PaymentMethodCard" -> PaymentMethod.CARD
+            "PaymentMethodTransfer" -> PaymentMethod.BANK_TRANSFER
+            "PaymentMethodEasyPay" ->
+                when (node.path("provider").asText(null)?.uppercase()?.removePrefix("EASY_PAY_PROVIDER_")) {
+                    "KAKAOPAY" -> PaymentMethod.KAKAOPAY
+                    "NAVERPAY" -> PaymentMethod.NAVERPAY
+                    "TOSSPAY" -> PaymentMethod.TOSSPAY
+                    else -> null
+                }
+            else -> null
+        }
 
     /** 포트원은 ISO-8601 오프셋 형식으로 준다. 우리는 UTC 로 저장한다 */
     private fun parseTime(raw: String): LocalDateTime? = try {

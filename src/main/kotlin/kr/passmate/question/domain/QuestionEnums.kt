@@ -29,15 +29,21 @@ enum class QuestionSource {
     MANUAL,
 }
 
-enum class QuestionType {
+enum class QuestionType(
+    /**
+     * 제한시간을 정하지 않았을 때의 기본값(초). 서술형은 쓰는 시간이 필요해 길다 —
+     * W-02b "서술형은 기본 90초로 잡혀 있어요". 유형 무관 30초 하나로 두면 AI 생성 서술형이 30초가 된다.
+     */
+    val defaultTimeLimitSec: Int,
+) {
     /** 객관식 — 보기 필요 */
-    MCQ,
+    MCQ(30),
 
     /** O/X */
-    OX,
+    OX(30),
 
     /** 서술형 — 정답 텍스트는 채점 기준으로 쓰고 AI 가 분석한다 */
-    ESSAY,
+    ESSAY(90),
 }
 
 enum class Difficulty {

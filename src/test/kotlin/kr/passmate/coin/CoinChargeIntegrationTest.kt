@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import kr.passmate.coin.client.PortOneClient
 import kr.passmate.coin.client.PortOnePaymentStatus
+import kr.passmate.coin.domain.PaymentMethod
 import kr.passmate.common.security.JwtTokenProvider
 import kr.passmate.hostlevel.domain.HostProfile
 import kr.passmate.hostlevel.repository.HostProfileRepository
@@ -120,6 +121,22 @@ class CoinChargeIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `확정 응답과 기록에는 포트원이 말한 실제 수단이 실린다`() {
+        // 화면은 수단을 고르지 않는다 — 결제창 안에서 고른 수단을 포트원 조회로 알아낸다
+        val (chargeId, paymentId) = requested(10_000)
+        fake.stub(paymentId, PortOnePaymentStatus.PAID, totalAmount = 10_000, method = PaymentMethod.KAKAOPAY)
+
+        confirm(chargeId)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.method").value("KAKAOPAY"))
+
+        // 내역 문구도 그 수단으로 — C-02-9 "카카오페이 충전". 주문 번호는 보이지 않는다
+        val latest = coins().get("lastTransaction")
+        assertThat(latest.get("description").asText()).isEqualTo("카카오페이 충전")
+        assertThat(latest.get("refType").asText()).isEqualTo("COIN_CHARGE")
+    }
+
+    @Test
     fun `포트원이 말하는 금액이 우리 요청과 다르면 코인을 넣지 않는다`() {
         val (chargeId, paymentId) = requested(10_000)
         // 클라이언트가 금액을 조작했거나 다른 결제를 가리키는 경우다
@@ -164,6 +181,8 @@ class CoinChargeIntegrationTest : IntegrationTestSupport() {
         val latest = coins().get("lastTransaction")
         assertThat(latest.get("type").asText()).isEqualTo("CHARGE")
         assertThat(latest.get("amount").asInt()).isEqualTo(10_000)
+        // 포트원이 수단을 안 주면 요청 때 고른 수단(CARD)이 그대로 문구가 된다
+        assertThat(latest.get("description").asText()).isEqualTo("카드 충전")
     }
 
     @Test

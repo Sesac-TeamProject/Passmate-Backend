@@ -37,12 +37,19 @@ data class ActiveHostedRoom(
     val currentQuestionNo: Int,
 )
 
-@Schema(description = "끝난 내 방")
+/**
+ * 끝난 내 방. 취소된 방(CANCELED)도 여기 담긴다 — 와이어프레임(W-09·M-13)의 방 상태가
+ * 진행 중·종료 둘뿐이라 종료 쪽에 붙인다(2026-09-07 결정). 화면은 status 로 취소 배지를 가른다.
+ */
+@Schema(description = "끝난 내 방 — 취소된 방 포함")
 data class EndedHostedRoom(
     val roomId: Long,
     val title: String,
+    @field:Schema(description = "ENDED 또는 CANCELED. 취소면 화면이 배지를 바꾸고 리포트 링크를 숨긴다")
+    val status: RoomStatus,
+    @field:Schema(description = "종료 시각. 취소면 취소 시각")
     val endedAt: LocalDateTime?,
-    @field:Schema(description = "그 세션에 들어왔던 학생 수. 중간에 나간 사람도 센다")
+    @field:Schema(description = "그 세션에 들어왔던 학생 수. 중간에 나간 사람도 센다. 취소면 0 — 세션이 없었다")
     val studentCount: Long,
     @field:Schema(description = "평균 정답률(%). 세션 종료 때 계산해 둔 값")
     val correctRate: Double?,

@@ -3,6 +3,7 @@ package kr.passmate.support
 import kr.passmate.coin.client.PortOneClient
 import kr.passmate.coin.client.PortOnePayment
 import kr.passmate.coin.client.PortOnePaymentStatus
+import kr.passmate.coin.domain.PaymentMethod
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
@@ -36,6 +37,7 @@ class FakePortOneClient : PortOneClient {
         paymentId: String,
         status: PortOnePaymentStatus = PortOnePaymentStatus.PAID,
         totalAmount: Int = defaultAmount,
+        method: PaymentMethod? = null,
     ) {
         stubs[paymentId] = {
             PortOnePayment(
@@ -43,6 +45,7 @@ class FakePortOneClient : PortOneClient {
                 status = status,
                 totalAmount = totalAmount,
                 pgTxId = "fake-tx-$paymentId",
+                method = method,
                 paidAt = LocalDateTime.now(),
             )
         }

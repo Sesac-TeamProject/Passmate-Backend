@@ -4,10 +4,12 @@ import kr.passmate.common.config.PolicyProperties
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.hostlevel.service.HostGradeQueryService
+import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.room.domain.Room
 import kr.passmate.room.domain.RoomStatus
 import kr.passmate.room.domain.RoomType
 import kr.passmate.room.dto.RoomCreateRequest
+import kr.passmate.room.dto.RoomQuestionTimesRequest
 import kr.passmate.room.dto.RoomUpdateRequest
 import kr.passmate.room.repository.RoomRepository
 import org.springframework.stereotype.Service
@@ -19,6 +21,7 @@ class RoomService(
     private val pinService: PinService,
     private val hostGradeQueryService: HostGradeQueryService,
     private val policyProperties: PolicyProperties,
+    private val questionSetQueryService: QuestionSetQueryService,
 ) {
 
     /**
@@ -58,6 +61,35 @@ class RoomService(
             maxParticipants = request.maxParticipants,
             isPublic = request.isPublic,
             scheduledAt = request.scheduledAt,
+        )
+        return room
+    }
+
+    /**
+     * 이 방에서만 쓸 문항별 제한시간을 통째로 갈아끼운다(W-02b, 웹 버그 리포트 B-18).
+     *
+     * 확정 세트는 불변이라 세트를 고치지 않는다 — 같은 세트를 쓰는 다른 방의 시간이 함께 바뀌면 안 된다.
+     * 전체 교체라 본문에 없는 문항은 세트 기본값으로 돌아가고, 빈 목록이면 전부 초기화다.
+     */
+    @Transactional
+    fun updateQuestionTimes(roomId: Long, hostUserId: Long, request: RoomQuestionTimesRequest): Room {
+        val room = getOwnedRoom(roomId, hostUserId)
+        val setId = room.questionSetId ?: throw BusinessException(ErrorCode.QUESTION_SET_REQUIRED)
+
+        val questionIds = request.times.map { it.questionId }
+        val duplicated = questionIds.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+        if (duplicated.isNotEmpty()) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "같은 문항이 두 번 들어 있습니다: $duplicated")
+        }
+        val known = questionSetQueryService.getDetail(setId, hostUserId).second.map { it.id }.toSet()
+        val unknown = questionIds.filterNot { it in known }
+        if (unknown.isNotEmpty()) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "이 방의 세트에 없는 문항입니다: $unknown")
+        }
+
+        room.overrideQuestionTimes(
+            times = request.times.associate { it.questionId to it.timeLimitSec },
+            autoAdvance = request.times.filter { it.autoAdvance }.map { it.questionId },
         )
         return room
     }

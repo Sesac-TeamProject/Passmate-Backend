@@ -35,6 +35,8 @@ data class QuestionResultRow(
     val correctCount: Int,
     val correctRate: Double,
     val aiAnalysisCount: Int,
+    @field:Schema(description = "문항 단위 선생님 코멘트(학생 전체 대상, W-07). 답안별 첨삭과 별개. 없으면 null")
+    val teacherComment: String?,
 )
 
 /** 학생별 점수·순위 (W-07 학생별 탭). */
@@ -73,6 +75,8 @@ data class AnswerResultView(
     val type: QuestionType,
     val content: String,
     val points: Int,
+    @field:Schema(description = "문항 주제. 세트에 주제를 적지 않았으면 null")
+    val topic: String?,
     @field:Schema(description = "마감된 문항에만 실린다 — 진행 중에 내보내면 정답이 샌다")
     val answer: String?,
     val explanation: String?,
@@ -82,9 +86,15 @@ data class AnswerResultView(
     val score: Int,
     @field:Schema(description = "첨삭 보정이 반영된 최종 점수")
     val finalScore: Int,
+    @field:Schema(description = "이 문항의 반 정답률(%). 채점된 답안이 분모라 서술형은 0. 마감 전에는 null — 진행 중 분포는 호스트만 본다")
+    val correctRate: Double?,
+    @field:Schema(description = "문항이 열린 뒤 제출까지 걸린 시간(ms). 미제출이면 null")
+    val elapsedMs: Long?,
     val analysisStatus: AnalysisStatus,
     val analysis: EssayAnalysisView?,
     val teacherReview: TeacherReviewView?,
+    @field:Schema(description = "문항 단위 선생님 코멘트 — 학생 전체에게 남긴 첨삭(M-06). 내 답안별 첨삭(teacherReview)과 별개")
+    val teacherComment: String?,
 )
 
 @Schema(description = "내 세션 결과")
@@ -103,6 +113,10 @@ data class MySessionResultResponse(
     val correctCount: Int,
     val submitCount: Int,
     val questionCount: Int,
+    @field:Schema(description = "순위의 분모. 중도 이탈자도 포함 — 결과 집계와 같은 인원")
+    val participantCount: Int,
+    @field:Schema(description = "제출한 문항의 소요 시간 합(ms). 아무것도 안 냈으면 null")
+    val elapsedMs: Long?,
     val questions: List<AnswerResultView>,
     val rating: RatingAvailability,
 )
@@ -118,5 +132,9 @@ data class ParticipantResultResponse(
     val correctCount: Int,
     val submitCount: Int,
     val questionCount: Int,
+    @field:Schema(description = "순위의 분모. 중도 이탈자도 포함 — 결과 집계와 같은 인원")
+    val participantCount: Int,
+    @field:Schema(description = "제출한 문항의 소요 시간 합(ms). 아무것도 안 냈으면 null")
+    val elapsedMs: Long?,
     val questions: List<AnswerResultView>,
 )
