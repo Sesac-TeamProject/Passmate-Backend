@@ -111,12 +111,13 @@ class Room(
         protected set
 
     /**
-     * 자동 넘김을 켠 문항 id 목록(W-02b 토글, 2026-09-07). NULL = 전부 꺼짐.
-     * 시간 만료로 마감된 문항이 여기 있으면 서버가 잠시 뒤 다음 문항을 자동 개시한다.
+     * 자동 넘김을 **끈** 문항 id 목록(W-02b 토글). NULL = 전부 켬 — 시간이 끝나면
+     * 바로 다음 문항으로 넘어가는 것이 기본이다(2026-09-08 시나리오 테스트 반전).
+     * 예외(끈 문항)를 저장해야 전체 교체 PUT 에서 빠진 문항이 기본값(켬)으로 돌아간다.
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "question_auto_advance")
-    var questionAutoAdvance: List<Long>? = null
+    @Column(name = "question_auto_advance_off")
+    var questionAutoAdvanceOff: List<Long>? = null
         protected set
 
     /** 호스트인지 확인하고, 아니면 403 으로 막는다. */
@@ -138,7 +139,7 @@ class Room(
         // 덮어쓴 시간·자동 넘김은 예전 세트의 문항 id 를 가리킨다 — 세트가 바뀌면 의미가 없으니 비운다
         if (questionSetId != this.questionSetId) {
             questionTimeOverrides = null
-            questionAutoAdvance = null
+            questionAutoAdvanceOff = null
         }
         this.title = title
         this.description = description
@@ -203,15 +204,15 @@ class Room(
      * 문항별 시간·자동 넘김을 통째로 갈아끼운다(전체 교체 — 빈 값이면 전부 기본으로 돌아간다). 대기 중일 때만.
      * 문항이 세트에 있는지·시간 범위는 Service 가 세트를 읽어 검사한다 — 방은 세트 내용을 모른다.
      */
-    fun overrideQuestionTimes(times: Map<Long, Int>, autoAdvance: Collection<Long> = emptyList()) {
+    fun overrideQuestionTimes(times: Map<Long, Int>, autoAdvanceOff: Collection<Long> = emptyList()) {
         verifyWaiting("문항별 시간은 대기 중일 때만 바꿀 수 있습니다.")
         questionTimeOverrides = times.takeIf { it.isNotEmpty() }
-        questionAutoAdvance = autoAdvance.distinct().sorted().takeIf { it.isNotEmpty() }
+        questionAutoAdvanceOff = autoAdvanceOff.distinct().sorted().takeIf { it.isNotEmpty() }
     }
 
-    /** 이 문항이 시간 만료로 마감되면 다음 문항을 자동으로 열지. */
+    /** 이 문항이 시간 만료로 마감되면 다음 문항을 자동으로 열지. 기본 켬 — 끈 목록에 있을 때만 거짓. */
     fun isAutoAdvance(questionId: Long): Boolean =
-        questionAutoAdvance?.contains(questionId) == true
+        questionAutoAdvanceOff?.contains(questionId) != true
 
     /** 이 방에서 쓸 제한시간. 덮어쓴 값이 없으면 세트에 적힌 기본값이다. */
     fun timeLimitSecOf(questionId: Long, default: Int): Int =

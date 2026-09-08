@@ -104,16 +104,26 @@ class RoomTest {
     }
 
     @Test
-    fun `자동 넘김은 켠 문항만 참이고 세트를 바꾸면 함께 비워진다`() {
+    fun `자동 넘김은 기본 켬이고 끈 문항만 거짓이다`() {
+        // 2026-09-08 시나리오 테스트 반전 — 시간이 끝나면 바로 다음 문제로 가는 것이 기본
         val room = room(questionSetId = 10L)
-        room.overrideQuestionTimes(mapOf(1L to 20), autoAdvance = listOf(1L, 3L))
+        assertThat(room.isAutoAdvance(1L)).isTrue()
+
+        room.overrideQuestionTimes(mapOf(1L to 20), autoAdvanceOff = listOf(2L))
 
         assertThat(room.isAutoAdvance(1L)).isTrue()
         assertThat(room.isAutoAdvance(2L)).isFalse()
+    }
+
+    @Test
+    fun `세트를 바꾸면 자동 넘김 끔 목록도 비워져 전부 기본(켬)으로 돌아간다`() {
+        val room = room(questionSetId = 10L)
+        room.overrideQuestionTimes(mapOf(1L to 20), autoAdvanceOff = listOf(1L, 3L))
 
         room.update("제목", null, null, 11L, null, false, null)
-        assertThat(room.questionAutoAdvance).isNull()
-        assertThat(room.isAutoAdvance(1L)).isFalse()
+
+        assertThat(room.questionAutoAdvanceOff).isNull()
+        assertThat(room.isAutoAdvance(1L)).isTrue()
     }
 
     @Test

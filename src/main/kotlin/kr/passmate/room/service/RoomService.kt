@@ -89,7 +89,8 @@ class RoomService(
 
         room.overrideQuestionTimes(
             times = request.times.associate { it.questionId to it.timeLimitSec },
-            autoAdvance = request.times.filter { it.autoAdvance }.map { it.questionId },
+            // 기본이 켬이라 끈 문항만 저장한다 — 본문에서 빠진 문항은 자동으로 기본값(켬)이 된다
+            autoAdvanceOff = request.times.filterNot { it.autoAdvance }.map { it.questionId },
         )
         return room
     }
