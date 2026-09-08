@@ -142,6 +142,16 @@ class RoomQuestionTimeIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `세트 기본값과 같은 시간은 덮어쓴 문항으로 남지 않는다`() {
+        // 화면이 전 문항을 그대로 보내는 경우 — 값이 기본과 같으면 오버라이드가 아니다
+        putTimes(hostToken, """{"times":[{"questionId":$mcqId,"timeLimitSec":30},{"questionId":$essayId,"timeLimitSec":90}]}""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.questions[0].timeLimitSec").value(30))
+            .andExpect(jsonPath("$.questions[0].overridden").value(false))
+            .andExpect(jsonPath("$.questions[1].overridden").value(true))
+    }
+
+    @Test
     fun `빈 목록을 보내면 세트 기본값으로 돌아간다`() {
         putTimes(hostToken, """{"times":[{"questionId":$mcqId,"timeLimitSec":20},{"questionId":$essayId,"timeLimitSec":90}]}""")
             .andExpect(status().isOk)
