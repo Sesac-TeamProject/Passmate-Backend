@@ -57,6 +57,8 @@ class JoinedRoomQueryService(
                 title = room.title,
                 hostNickname = hostNicknames[room.hostUserId] ?: UNKNOWN_HOST,
                 status = room.status,
+                // 아직 살아 있는 방만 PIN 을 준다 — 끝난 방 PIN 은 다른 방이 쓰고 있을 수 있다
+                pin = room.pin.takeIf { room.status == RoomStatus.WAITING || room.status == RoomStatus.RUNNING },
                 startedAt = room.startedAt,
                 endedAt = room.endedAt,
                 questionCount = room.questionSetId?.let { questionCounts[it] } ?: 0,
