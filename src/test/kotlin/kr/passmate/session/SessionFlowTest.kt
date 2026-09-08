@@ -283,6 +283,25 @@ class SessionFlowTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `나간 참가자는 랭킹에 남고 강퇴만 빠진다`() {
+        // 결과 화면을 봤다가 나간 학생이 재조회(스냅샷 랭킹)에서 사라지던 문제(시나리오 테스트, 2026-09-08)
+        val leaver = participantService.join(roomId, null, JoinRoomRequest(nickname = "나간이"))
+        val kicked = participantService.join(roomId, null, JoinRoomRequest(nickname = "강퇴자"))
+        start()
+        submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+        submit(leaver.accessToken!!, mcqId, "성공").andExpect(status().isCreated)
+        submit(kicked.accessToken!!, mcqId, "성공").andExpect(status().isCreated)
+
+        participantService.leave(roomId, kr.passmate.common.security.GuestPrincipal(leaver.participant.id, roomId))
+        participantService.kick(roomId, kicked.participant.id, hostId)
+
+        val ranking = mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isOk).andReturn().json()
+        val nicknames = ranking.map { it.get("nickname").asText() }
+        assertThat(nicknames).contains("게스트", "나간이").doesNotContain("강퇴자")
+    }
+
+    @Test
     fun `화면을 잠그면 답안을 낼 수 없고 풀면 다시 낼 수 있다`() {
         start()
 

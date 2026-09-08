@@ -63,9 +63,12 @@ class SessionQueryService(
         }
     }
 
-    /** 점수 목록에 닉네임을 붙이고 등수를 매긴다. 동점은 같은 등수로 묶는다(공동 3등 다음은 5등). */
+    /**
+     * 점수 목록에 닉네임을 붙이고 등수를 매긴다. 동점은 같은 등수로 묶는다(공동 3등 다음은 5등).
+     * 나간 사람도 남긴다 — 결과 화면을 봤다가 나간 학생이 재조회에서 사라지면 안 된다. 강퇴만 뺀다.
+     */
     private fun toEntries(roomId: Long, scores: List<ParticipantScore>): List<RankingEntry> {
-        val participants = participantQueryService.listJoined(roomId).associateBy { it.id }
+        val participants = participantQueryService.listRankable(roomId).associateBy { it.id }
         return scores
             .mapNotNull { score ->
                 participants[score.participantId]?.let {
