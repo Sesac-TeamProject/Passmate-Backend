@@ -46,7 +46,7 @@ class RoomTest {
     @Test
     fun `최대 인원이 없으면 정원이 차지 않는다`() {
         val room = room(maxParticipants = null)
-        repeat(100) { room.increaseParticipantCount() }
+        room.syncParticipantCount(100)
 
         assertThat(room.isFull()).isFalse()
     }
@@ -54,8 +54,7 @@ class RoomTest {
     @Test
     fun `정원이 차면 입장을 막는다`() {
         val room = room(maxParticipants = 2)
-        room.increaseParticipantCount()
-        room.increaseParticipantCount()
+        room.syncParticipantCount(2)
 
         assertThatThrownBy { room.verifyJoinable() }
             .isInstanceOf(BusinessException::class.java)
@@ -74,10 +73,13 @@ class RoomTest {
     }
 
     @Test
-    fun `인원 수는 0 아래로 내려가지 않는다`() {
+    fun `인원 수는 실제 참가자 행 수로 맞춰지고 음수는 0 이 된다`() {
+        // 증감이 아니라 재계산 — 한 번 어긋난 값이 남지 않는다(2026-09-08)
         val room = room()
-        room.decreaseParticipantCount()
+        room.syncParticipantCount(3)
+        assertThat(room.participantCount).isEqualTo(3)
 
+        room.syncParticipantCount(-1)
         assertThat(room.participantCount).isZero()
     }
 

@@ -221,12 +221,12 @@ class Room(
     fun hasTimeOverride(questionId: Long): Boolean =
         questionTimeOverrides?.containsKey(questionId) == true
 
-    fun increaseParticipantCount() {
-        participantCount += 1
-    }
-
-    fun decreaseParticipantCount() {
-        if (participantCount > 0) participantCount -= 1
+    /**
+     * 인원을 실제 참가자 행 수로 맞춘다. 증감만 하면 한 번 어긋난 값이 영영 남아
+     * 목록과 입장 화면의 "N명 참여 중"이 서로 다르게 보인다(시나리오 테스트, 2026-09-08).
+     */
+    fun syncParticipantCount(joinedCount: Int) {
+        participantCount = joinedCount.coerceAtLeast(0)
     }
 
     /** 정원이 찼는지. maxParticipants 가 null 이면 제한 없음. */

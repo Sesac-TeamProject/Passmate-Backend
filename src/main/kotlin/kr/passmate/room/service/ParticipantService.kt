@@ -78,7 +78,7 @@ class ParticipantService(
                 deviceKey = request.deviceKey,
             ),
         )
-        room.increaseParticipantCount()
+        syncCount(room)
 
         // 유료 방은 살아 있는 참가비 결제가 있어야 들어온다(FR-051).
         // 게이트는 서버에만 있다 — 결제 화면을 건너뛰고 이 API 를 바로 불러도 막힌다
@@ -123,7 +123,7 @@ class ParticipantService(
 
         if (participant.status == ParticipantStatus.LEFT) {
             participant.rejoin()
-            roomRepository.findByIdForUpdate(roomId)?.increaseParticipantCount()
+            roomRepository.findByIdForUpdate(roomId)?.let(::syncCount)
             applicationEventPublisher.publishEvent(participant.toJoinedEvent())
         }
 
@@ -181,7 +181,17 @@ class ParticipantService(
             ?: throw BusinessException(ErrorCode.PARTICIPANT_NOT_FOUND, "이 방에 입장한 기록이 없습니다.")
 
     private fun decreaseCount(roomId: Long) {
-        roomRepository.findByIdForUpdate(roomId)?.decreaseParticipantCount()
+        roomRepository.findByIdForUpdate(roomId)?.let(::syncCount)
+    }
+
+    /**
+     * 인원을 참가자 행에서 다시 센다. 증감만 하면 한 번 어긋난 값이 그대로 남아
+     * 목록과 PIN 입장 화면의 "N명 참여 중"이 서로 다르게 보인다(시나리오 테스트, 2026-09-08).
+     */
+    private fun syncCount(room: Room) {
+        room.syncParticipantCount(
+            participantRepository.countByRoomIdAndStatus(room.id, ParticipantStatus.JOINED),
+        )
     }
 
     private fun Participant.toJoinedEvent() =

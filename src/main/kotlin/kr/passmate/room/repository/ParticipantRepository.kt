@@ -40,6 +40,9 @@ interface ParticipantRepository : JpaRepository<Participant, Long> {
     /** 참여한 방 수. 같은 방에 두 번 입장할 수 없어 참가자 행 수 = 방 수다. */
     fun countByUserId(userId: Long): Long
 
+    /** 지금 방에 있는 인원. room.participant_count 를 실제 행에서 다시 맞출 때 쓴다 */
+    fun countByRoomIdAndStatus(roomId: Long, status: ParticipantStatus): Int
+
     /**
      * 방별로 들어왔던 사람 수. `room.participant_count` 는 퇴장하면 줄어들어
      * "이 세션에 몇 명이 참여했나"를 답하지 못한다.
