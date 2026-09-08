@@ -31,6 +31,9 @@ interface ParticipantRepository : JpaRepository<Participant, Long> {
     /** 나간·내보내진 사람까지 전부. 결과·리포트는 중도 이탈자의 점수도 세야 한다. */
     fun findAllByRoomIdOrderByJoinedAtAsc(roomId: Long): List<Participant>
 
+    /** 재입장이 찾는 내 참가자 행. 상태를 가리지 않고 가장 최근 것 — 나갔던 행을 되살린다 */
+    fun findFirstByRoomIdAndUserIdOrderByJoinedAtDesc(roomId: Long, userId: Long): Participant?
+
     /** 내가 참가자로 들어갔던 기록 전부. 누적 리포트·참여한 방 목록이 쓴다. */
     fun findAllByUserIdOrderByJoinedAtDesc(userId: Long): List<Participant>
 

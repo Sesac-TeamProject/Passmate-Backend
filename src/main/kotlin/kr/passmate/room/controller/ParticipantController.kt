@@ -50,6 +50,17 @@ class ParticipantController(
             participantService.join(roomId, (principal as? UserPrincipal)?.userId, request),
         )
 
+    @Operation(
+        summary = "재입장",
+        description = "이미 들어갔던 방에 PIN 없이 다시 들어간다. 나갔던 사람은 원래 참가자 행이 되살아나고, " +
+            "게스트는 토큰을 새로 받는다. 강퇴당했거나 끝난 방은 들어올 수 없다.",
+    )
+    @PostMapping("/me/rejoin")
+    fun rejoin(
+        @CurrentUser principal: AuthPrincipal,
+        @PathVariable roomId: Long,
+    ): JoinRoomResponse = JoinRoomResponse.from(participantService.rejoin(roomId, principal))
+
     @Operation(summary = "참가자 목록 조회", description = "대기실 초기 로딩·재접속용. 나간 참가자는 빠진다. 방에 속한 사람만 볼 수 있다.")
     @GetMapping
     fun list(

@@ -11,6 +11,7 @@ import kr.passmate.common.security.UserPrincipal
 import kr.passmate.room.domain.Participant
 import kr.passmate.room.domain.ParticipantStatus
 import kr.passmate.room.domain.Room
+import kr.passmate.room.domain.RoomStatus
 import kr.passmate.room.domain.RoomType
 import kr.passmate.room.dto.JoinRoomRequest
 import kr.passmate.room.repository.ParticipantRepository
@@ -91,6 +92,46 @@ class ParticipantService(
             // 회원은 이미 자기 액세스 토큰이 있으므로 새로 주지 않는다
             accessToken = guestToken?.let { jwtTokenProvider.issueGuestToken(participant.id, roomId) },
             guestToken = guestToken,
+        )
+    }
+
+    /**
+     * 이미 들어갔던 방에 다시 들어간다 (시나리오 테스트 "세션이 끝나기 전까지는 핀 없이 재입장", 2026-09-08).
+     *
+     * 새 참가자 행을 만들지 않는다 — 점수·답안이 붙어 있는 원래 행을 되살려야
+     * 랭킹과 리포트가 갈라지지 않는다. 강퇴당한 사람은 돌아올 수 없다.
+     */
+    @Transactional
+    fun rejoin(roomId: Long, principal: AuthPrincipal): JoinResult {
+        val room = roomRepository.findById(roomId)
+            .orElseThrow { BusinessException(ErrorCode.ROOM_NOT_FOUND) }
+        // 끝난 방은 결과 화면으로 가야 한다 — 입장으로 되돌리지 않는다
+        if (room.status != RoomStatus.WAITING && room.status != RoomStatus.RUNNING) {
+            throw BusinessException(ErrorCode.ROOM_ENDED)
+        }
+
+        val participant = when (principal) {
+            is UserPrincipal -> participantRepository
+                .findFirstByRoomIdAndUserIdOrderByJoinedAtDesc(roomId, principal.userId)
+                ?: throw BusinessException(ErrorCode.PARTICIPANT_NOT_FOUND, "이 방에 입장한 기록이 없습니다.")
+            is GuestPrincipal -> getParticipant(principal.participantId)
+        }
+        verifyBelongsTo(roomId, participant)
+        if (participant.status == ParticipantStatus.KICKED) {
+            throw BusinessException(ErrorCode.ACCESS_DENIED, "내보내진 방에는 다시 들어올 수 없습니다.")
+        }
+
+        if (participant.status == ParticipantStatus.LEFT) {
+            participant.rejoin()
+            roomRepository.findByIdForUpdate(roomId)?.increaseParticipantCount()
+            applicationEventPublisher.publishEvent(participant.toJoinedEvent())
+        }
+
+        return JoinResult(
+            participant = participant,
+            // 게스트 토큰은 한 시간이면 만료된다 — 돌아올 때 새로 준다
+            accessToken = participant.guestToken?.let { jwtTokenProvider.issueGuestToken(participant.id, roomId) },
+            guestToken = participant.guestToken,
         )
     }
 
