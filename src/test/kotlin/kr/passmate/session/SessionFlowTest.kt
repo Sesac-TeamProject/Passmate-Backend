@@ -217,28 +217,29 @@ class SessionFlowTest : IntegrationTestSupport() {
         assertThat(first.get("ranking")[0].get("rank").asInt()).isEqualTo(1)
 
         next()
-        // 서술형은 제출만 해도 배점을 잠정으로 받는다 → 뒤집힌다
+        // 서술형은 첨삭 전 0점(2026-09-08 반전) — 순위는 그대로, 변동 값 0 이 실린다
         submit(guestToken, essayId, "연결지향 프로토콜입니다").andExpect(status().isCreated)
         endCurrent()
 
         val second = questionResult(guestToken, essayId).andExpect(status().isOk).andReturn().json()
         val byNickname = second.get("ranking").associateBy { it.get("nickname").asText() }
-        assertThat(byNickname["게스트"]!!.get("rank").asInt()).isEqualTo(1)
-        assertThat(byNickname["게스트"]!!.get("rankChange").asInt()).isEqualTo(1)     // 2위 → 1위
-        assertThat(byNickname["게스트2"]!!.get("rank").asInt()).isEqualTo(2)
-        assertThat(byNickname["게스트2"]!!.get("rankChange").asInt()).isEqualTo(-1)   // 1위 → 2위
+        assertThat(byNickname["게스트2"]!!.get("rank").asInt()).isEqualTo(1)
+        assertThat(byNickname["게스트2"]!!.get("rankChange").asInt()).isEqualTo(0)    // 변동 없음도 값으로 실린다
+        assertThat(byNickname["게스트"]!!.get("rank").asInt()).isEqualTo(2)
+        assertThat(byNickname["게스트"]!!.get("rankChange").asInt()).isEqualTo(0)
     }
 
     @Test
-    fun `서술형은 속도 보너스 없이 배점을 잠정으로 받는다`() {
+    fun `서술형은 첨삭 전까지 점수를 받지 않는다`() {
+        // "잘 모르겠습니다"만 써도 배점을 받던 잠정 만점의 반전(2026-09-08 시나리오 테스트)
         start()
         endCurrent()
         next()
 
-        submit(guestToken, essayId, "연결지향 프로토콜입니다")
+        submit(guestToken, essayId, "잘 모르겠습니다")
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.isCorrect").doesNotExist())
-            .andExpect(jsonPath("$.baseScore").value(200))
+            .andExpect(jsonPath("$.baseScore").value(0))
             .andExpect(jsonPath("$.speedBonus").value(0))
     }
 

@@ -53,14 +53,14 @@ class ScoreCalculatorTest {
     }
 
     @Test
-    fun `서술형은 속도 보너스 없이 배점을 잠정 부여하고 정오는 미정이다`() {
-        // 빨리 대충 쓴 쪽이 유리해지면 안 되므로 보너스를 주지 않는다
-        val r = calculator.score(QuestionType.ESSAY, 100, "제 생각에는...", "모범답안", BigDecimal.ONE)
+    fun `서술형은 첨삭 전까지 0점이고 정오는 미정이다`() {
+        // "잘 모르겠습니다"만 써도 배점을 받던 잠정 만점 정책의 반전(2026-09-08 시나리오 테스트)
+        val r = calculator.score(QuestionType.ESSAY, 100, "잘 모르겠습니다", "모범답안", BigDecimal.ONE)
 
         assertThat(r.isCorrect).isNull()
-        assertThat(r.baseScore).isEqualTo(100)
+        assertThat(r.baseScore).isZero()
         assertThat(r.speedBonus).isZero()
-        assertThat(r.total).isEqualTo(100)
+        assertThat(r.total).isZero()
     }
 
     @Test
