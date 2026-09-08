@@ -14,7 +14,7 @@ import java.time.LocalDateTime
 data class ResultSummary(
     val participantCount: Int,
     val questionCount: Int,
-    @field:Schema(description = "채점된 답안 중 정답 비율(%). 서술형은 채점 전이라 빠진다")
+    @field:Schema(description = "평균 정답률(%). 분모 = 참가자 전원 × 자동 채점(비서술형) 문항 — 미제출도 오답으로 센다")
     val avgCorrectRate: Double,
     @field:Schema(description = "참가자 1인당 평균 점수. 한 문제도 안 푼 사람도 분모에 든다")
     val avgScore: Double,
@@ -33,7 +33,8 @@ data class QuestionResultRow(
     val points: Int,
     val submitCount: Int,
     val correctCount: Int,
-    val correctRate: Double,
+    @field:Schema(description = "정답률(%). 분모 = 참가자 전원. 서술형은 자동 채점이 없어 null")
+    val correctRate: Double?,
     val aiAnalysisCount: Int,
     @field:Schema(description = "문항 단위 선생님 코멘트(학생 전체 대상, W-07). 답안별 첨삭과 별개. 없으면 null")
     val teacherComment: String?,
