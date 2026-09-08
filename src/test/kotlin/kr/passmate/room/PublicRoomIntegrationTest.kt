@@ -1,8 +1,10 @@
 package kr.passmate.room
 
 import kr.passmate.common.security.JwtTokenProvider
+import kr.passmate.room.dto.JoinRoomRequest
 import kr.passmate.room.dto.RoomCreateRequest
 import kr.passmate.room.repository.RoomRepository
+import kr.passmate.room.service.ParticipantService
 import kr.passmate.room.service.RoomService
 import kr.passmate.support.IntegrationTestSupport
 import kr.passmate.user.domain.AuthProvider
@@ -31,6 +33,7 @@ class PublicRoomIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var jwtTokenProvider: JwtTokenProvider
     @Autowired private lateinit var roomService: RoomService
     @Autowired private lateinit var roomRepository: RoomRepository
+    @Autowired private lateinit var participantService: ParticipantService
 
     private var hostId: Long = 0
 
@@ -61,6 +64,18 @@ class PublicRoomIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.content[0].pin").doesNotExist())
             .andExpect(jsonPath("$.content[0].host.nickname").value("김선생"))
+    }
+
+    @Test
+    fun `게스트 토큰을 들고 있어도 공개 방 목록은 볼 수 있다`() {
+        // 방에 들어갔다 나온 브라우저는 게스트 토큰을 들고 있다 — 그 상태로 목록을 열면 403 이던 문제(시나리오 테스트 S-07, 2026-09-09)
+        val roomId = createRoom("공개 방", isPublic = true)
+        val guestToken = participantService.join(roomId, null, JoinRoomRequest(nickname = "게스트")).accessToken!!
+
+        mockMvc.perform(get("/rooms/public").header("Authorization", "Bearer $guestToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.totalElements").value(1))
+            .andExpect(jsonPath("$.content[0].title").value("공개 방"))
     }
 
     @Test

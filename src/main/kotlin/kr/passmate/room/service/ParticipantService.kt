@@ -33,6 +33,13 @@ data class JoinResult(
     val guestToken: String?,
 )
 
+/** 세션이 끝난 뒤 참가자 한 명의 최종 점수·등수. session 기능이 랭킹에서 만들어 넘긴다 */
+data class ParticipantFinalResult(
+    val participantId: Long,
+    val totalScore: Int,
+    val rank: Int,
+)
+
 @Service
 class ParticipantService(
     private val roomRepository: RoomRepository,
@@ -179,6 +186,16 @@ class ParticipantService(
     fun getJoinedParticipantOfUser(roomId: Long, userId: Long): Participant =
         participantRepository.findByRoomIdAndUserIdAndStatus(roomId, userId, ParticipantStatus.JOINED)
             ?: throw BusinessException(ErrorCode.PARTICIPANT_NOT_FOUND, "이 방에 입장한 기록이 없습니다.")
+
+    /**
+     * 최종 점수·등수를 참가자 행에 굳힌다. 세션 종료와 첨삭 반영 시점에 session 기능이 부른다.
+     * 목록에 없는 참가자(강퇴 등)는 건드리지 않는다.
+     */
+    @Transactional
+    fun recordFinalResults(roomId: Long, results: List<ParticipantFinalResult>) {
+        val byId = participantRepository.findAllByRoomIdOrderByJoinedAtAsc(roomId).associateBy { it.id }
+        results.forEach { result -> byId[result.participantId]?.recordResult(result.totalScore, result.rank) }
+    }
 
     private fun decreaseCount(roomId: Long) {
         roomRepository.findByIdForUpdate(roomId)?.let(::syncCount)

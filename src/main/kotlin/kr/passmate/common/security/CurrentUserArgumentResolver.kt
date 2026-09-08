@@ -46,6 +46,10 @@ class CurrentUserArgumentResolver : HandlerMethodArgumentResolver {
         }
 
         if (!parameter.parameterType.isInstance(principal)) {
+            // 주체가 선택인 API(공개 방 목록 등)는 게스트 토큰을 달고 와도 비로그인처럼 다룬다 —
+            // 방에 들어갔다 나온 브라우저가 게스트 토큰을 들고 있는 채로 공개 목록을 열면 403 이 났다
+            // (2026-09-09 시나리오 테스트 S-07). 회원만 받는 필수 파라미터는 지금처럼 막는다
+            if (!required) return null
             // 회원 전용 API 를 게스트 토큰으로 부른 경우가 대부분이다
             throw BusinessException(
                 if (principal is GuestPrincipal) ErrorCode.GUEST_NOT_ALLOWED else ErrorCode.ACCESS_DENIED,

@@ -3,6 +3,7 @@ package kr.passmate.rating
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import kr.passmate.common.security.JwtTokenProvider
+import kr.passmate.hostlevel.repository.HostProfileRepository
 import kr.passmate.question.domain.QuestionType
 import kr.passmate.question.dto.QuestionRequest
 import kr.passmate.question.dto.QuestionSetCreateRequest
@@ -47,6 +48,7 @@ class RoomRatingIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var participantService: ParticipantService
     @Autowired private lateinit var questionSetService: QuestionSetService
     @Autowired private lateinit var jwtTokenProvider: JwtTokenProvider
+    @Autowired private lateinit var hostProfileRepository: HostProfileRepository
 
     private var hostId: Long = 0
     private var roomId: Long = 0
@@ -90,6 +92,18 @@ class RoomRatingIntegrationTest : IntegrationTestSupport() {
         assertThat(body.get("tags").map { it.asText() }).containsExactly("CLEAR_EXPLANATION", "GOOD_PACING")
         assertThat(body.get("comment").asText()).isEqualTo("설명이 좋았어요")
         assertThat(body.get("id").asLong()).isPositive()
+    }
+
+    @Test
+    fun `별점을 남기면 호스트 평판의 평균 별점과 평가 수가 바로 갱신된다`() {
+        // 별점은 세션이 끝난 뒤에 들어오므로 종료 시점 집계에는 없다 — 다음 세션·월 배치까지 옛 값이던 문제(시나리오 테스트 S-06, 2026-09-09)
+        runSession()
+
+        rate(studentToken, 4).andExpect(status().isCreated)
+
+        val profile = hostProfileRepository.findByUserId(hostId)!!
+        assertThat(profile.ratingCount).isEqualTo(1)
+        assertThat(profile.avgRating).isEqualByComparingTo("4.00")
     }
 
     @Test

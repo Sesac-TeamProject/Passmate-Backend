@@ -1,5 +1,6 @@
 package kr.passmate.rating.service
 
+import kr.passmate.common.event.RoomRatedEvent
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.common.security.AuthPrincipal
@@ -8,6 +9,7 @@ import kr.passmate.rating.dto.RoomRatingRequest
 import kr.passmate.rating.repository.RoomRatingRepository
 import kr.passmate.room.service.RoomQueryService
 import kr.passmate.session.service.AnswerQueryService
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -23,6 +25,7 @@ class RoomRatingService(
     private val answerQueryService: AnswerQueryService,
     private val roomRatingQueryService: RoomRatingQueryService,
     private val roomRatingRepository: RoomRatingRepository,
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
 
     /**
@@ -47,12 +50,15 @@ class RoomRatingService(
             comment = request.comment?.trim()?.takeIf { it.isNotBlank() },
         )
 
-        return try {
+        val saved = try {
             roomRatingRepository.saveAndFlush(rating)
         } catch (e: DataIntegrityViolationException) {
             // uk_room_rating — 같은 사람이 제출 버튼을 두 번 눌러 위 검사를 나란히 통과한 경우.
             // 여기서 안 잡으면 500 이 나가서 "이미 평가함"이 서버 장애처럼 보인다
             throw BusinessException(ErrorCode.ALREADY_RATED, cause = e)
         }
+        // 호스트 평판(평균 별점·평가 수)은 hostlevel 이 이 이벤트를 받아 바로 다시 집계한다
+        applicationEventPublisher.publishEvent(RoomRatedEvent(room.id, room.hostUserId))
+        return saved
     }
 }

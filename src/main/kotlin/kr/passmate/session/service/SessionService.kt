@@ -5,15 +5,20 @@ import kr.passmate.common.event.SessionEndedEvent
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.question.domain.Question
+import kr.passmate.question.domain.QuestionType
 import kr.passmate.question.domain.QuestionSetStatus
 import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.room.domain.Room
 import kr.passmate.room.domain.RoomStatus
 import kr.passmate.room.repository.RoomRepository
+import kr.passmate.room.service.ParticipantFinalResult
+import kr.passmate.room.service.ParticipantQueryService
+import kr.passmate.room.service.ParticipantService
 import kr.passmate.session.domain.SessionEventType
 import kr.passmate.session.domain.SessionQuestion
 import kr.passmate.session.dto.QuestionEndedPayload
 import kr.passmate.session.dto.QuestionStartedPayload
+import kr.passmate.session.dto.RankingEntry
 import kr.passmate.session.dto.ScreenLockPayload
 import kr.passmate.session.repository.RoomStateRepository
 import kr.passmate.session.repository.SessionQuestionRepository
@@ -36,6 +41,8 @@ class SessionService(
     private val questionSetQueryService: QuestionSetQueryService,
     private val roomStateRepository: RoomStateRepository,
     private val sessionQueryService: SessionQueryService,
+    private val participantService: ParticipantService,
+    private val participantQueryService: ParticipantQueryService,
     private val eventPublisher: SessionEventPublisher,
     private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
@@ -169,8 +176,10 @@ class SessionService(
         currentRunning(room.id)?.let { closeQuestion(it, questions) }
 
         room.close()
-        recordRoomResult(room)
-        eventPublisher.toRoom(room.id, SessionEventType.SESSION_ENDED, sessionQueryService.ranking(room.id))
+        recordRoomResult(room, questions)
+        val ranking = sessionQueryService.ranking(room.id)
+        recordParticipantResults(room.id, ranking)
+        eventPublisher.toRoom(room.id, SessionEventType.SESSION_ENDED, ranking)
 
         // 개인 학습 리포트는 report 기능이 만든다. 직접 부르면 session ⇄ report 순환이라 이벤트로 끊는다
         applicationEventPublisher.publishEvent(SessionEndedEvent(room.id))
@@ -189,6 +198,15 @@ class SessionService(
         val room = roomRepository.findById(event.roomId).orElse(null) ?: return
         if (room.status != RoomStatus.ENDED) return
         recordRoomResult(room)
+        recordParticipantResults(room.id, sessionQueryService.ranking(room.id))
+    }
+
+    /** 최종 점수·등수는 참가자 행에도 굳힌다 — 게스트 기록 연동 응답이 그 컬럼을 읽는다 */
+    private fun recordParticipantResults(roomId: Long, ranking: List<RankingEntry>) {
+        participantService.recordFinalResults(
+            roomId,
+            ranking.map { ParticipantFinalResult(it.participantId, it.totalScore.toInt(), it.rank) },
+        )
     }
 
     // ---------- 내부 ----------
@@ -254,19 +272,30 @@ class SessionService(
     /**
      * 방의 평균 점수·정답률을 한 번 계산해 박아 둔다.
      * 마이페이지 "내가 만든 방" 목록이 방마다 답안을 다시 세지 않게 하려는 값이다.
+     *
+     * 정답률 분모는 **참가자 전원 × 자동 채점(비서술형) 문항** — 방 리포트(`SessionResultQueryService`)와
+     * 같은 정의다. 제출된 답안만 분모로 쓰면 목록은 20%, 리포트는 3.1% 처럼 같은 방이 두 값으로
+     * 보였다(2026-09-09 시나리오 테스트). 첨삭은 정답률을 바꾸지 않으므로 [questions] 가 없으면
+     * 정답률은 그대로 두고 평균 점수만 다시 잰다.
      */
-    private fun recordRoomResult(room: Room) {
-        val questions = sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(room.id)
-        val submitCount = questions.sumOf { it.submitCount }
-        val correctCount = questions.sumOf { it.correctCount }
+    private fun recordRoomResult(room: Room, questions: List<Question>? = null) {
+        val participants = participantQueryService.listAll(room.id)
         val totalScore = roomStateRepository.findRanking(room.id).sumOf { it.totalScore }
+        val avgScore =
+            if (participants.isEmpty()) BigDecimal.ZERO
+            else BigDecimal(totalScore.toDouble() / participants.size).setScale(2, RoundingMode.HALF_UP)
 
-        room.recordResult(
-            avgScore = if (room.participantCount == 0) BigDecimal.ZERO
-            else BigDecimal(totalScore.toDouble() / room.participantCount).setScale(2, RoundingMode.HALF_UP),
-            correctRate = if (submitCount == 0) BigDecimal.ZERO
-            else BigDecimal(correctCount * 100.0 / submitCount).setScale(2, RoundingMode.HALF_UP),
-        )
+        val correctRate = questions?.let { list ->
+            val typeById = list.associate { it.id to it.type }
+            val sessionQuestions = sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(room.id)
+            val gradable = sessionQuestions.count { typeById[it.questionId] != QuestionType.ESSAY }
+            val correctCount = sessionQuestions.sumOf { it.correctCount }
+            val denominator = participants.size * gradable
+            if (denominator == 0) BigDecimal.ZERO
+            else BigDecimal(correctCount * 100.0 / denominator).setScale(2, RoundingMode.HALF_UP)
+        } ?: room.correctRate ?: BigDecimal.ZERO
+
+        room.recordResult(avgScore = avgScore, correctRate = correctRate)
     }
 
     private fun currentRunning(roomId: Long): SessionQuestion? =

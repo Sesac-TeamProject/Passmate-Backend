@@ -1,5 +1,6 @@
 package kr.passmate.hostlevel.service
 
+import kr.passmate.common.event.RoomRatedEvent
 import kr.passmate.common.event.SessionEndedEvent
 import kr.passmate.hostlevel.config.HostLevelProperties
 import kr.passmate.hostlevel.domain.HostProfile
@@ -48,6 +49,17 @@ class HostGradeService(
     @Transactional
     fun onSessionEnded(event: SessionEndedEvent) {
         evaluate(roomQueryService.getRoom(event.roomId).hostUserId)
+    }
+
+    /**
+     * 별점이 들어오면 평판 집계(평균 별점·평가 수)를 바로 다시 본다.
+     * 별점은 세션이 끝난 뒤 24시간 안에 들어오므로 종료 시점 집계에는 없다 — 그대로 두면
+     * 명성 화면이 다음 세션이나 월 배치까지 옛 평균을 보였다(2026-09-09 시나리오 테스트 S-06).
+     */
+    @EventListener
+    @Transactional
+    fun onRoomRated(event: RoomRatedEvent) {
+        evaluate(event.hostUserId)
     }
 
     /** 호스트 한 명을 판정한다. 프로필이 없으면 이때 만든다. */
