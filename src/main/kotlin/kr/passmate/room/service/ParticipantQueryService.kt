@@ -54,6 +54,17 @@ class ParticipantQueryService(
     }
 
     /**
+     * 랭킹에 남는 참가자 — 나간 사람은 남고 **강퇴만 뺀다**.
+     * JOINED 만 쓰면 결과 화면을 봤다가 나간 학생이 재조회에서 사라진다
+     * (시나리오 테스트 "뒤로 가기 후 결과 화면에서 한 명이 사라짐", 2026-09-08).
+     */
+    fun listRankable(roomId: Long): List<Participant> {
+        verifyRoomExists(roomId)
+        return participantRepository.findAllByRoomIdOrderByJoinedAtAsc(roomId)
+            .filterNot { it.status == ParticipantStatus.KICKED }
+    }
+
+    /**
      * 방에 들어왔던 사람 전부(나간 사람 포함). 결과·리포트가 쓴다 —
      * 중도 이탈자도 낸 답안과 점수가 있어서 목록에서 빼면 합계가 어긋난다.
      */

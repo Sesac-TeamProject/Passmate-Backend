@@ -46,7 +46,7 @@ class RoomTest {
     @Test
     fun `최대 인원이 없으면 정원이 차지 않는다`() {
         val room = room(maxParticipants = null)
-        repeat(100) { room.increaseParticipantCount() }
+        room.syncParticipantCount(100)
 
         assertThat(room.isFull()).isFalse()
     }
@@ -54,8 +54,7 @@ class RoomTest {
     @Test
     fun `정원이 차면 입장을 막는다`() {
         val room = room(maxParticipants = 2)
-        room.increaseParticipantCount()
-        room.increaseParticipantCount()
+        room.syncParticipantCount(2)
 
         assertThatThrownBy { room.verifyJoinable() }
             .isInstanceOf(BusinessException::class.java)
@@ -74,10 +73,13 @@ class RoomTest {
     }
 
     @Test
-    fun `인원 수는 0 아래로 내려가지 않는다`() {
+    fun `인원 수는 실제 참가자 행 수로 맞춰지고 음수는 0 이 된다`() {
+        // 증감이 아니라 재계산 — 한 번 어긋난 값이 남지 않는다(2026-09-08)
         val room = room()
-        room.decreaseParticipantCount()
+        room.syncParticipantCount(3)
+        assertThat(room.participantCount).isEqualTo(3)
 
+        room.syncParticipantCount(-1)
         assertThat(room.participantCount).isZero()
     }
 
@@ -104,16 +106,26 @@ class RoomTest {
     }
 
     @Test
-    fun `자동 넘김은 켠 문항만 참이고 세트를 바꾸면 함께 비워진다`() {
+    fun `자동 넘김은 기본 켬이고 끈 문항만 거짓이다`() {
+        // 2026-09-08 시나리오 테스트 반전 — 시간이 끝나면 바로 다음 문제로 가는 것이 기본
         val room = room(questionSetId = 10L)
-        room.overrideQuestionTimes(mapOf(1L to 20), autoAdvance = listOf(1L, 3L))
+        assertThat(room.isAutoAdvance(1L)).isTrue()
+
+        room.overrideQuestionTimes(mapOf(1L to 20), autoAdvanceOff = listOf(2L))
 
         assertThat(room.isAutoAdvance(1L)).isTrue()
         assertThat(room.isAutoAdvance(2L)).isFalse()
+    }
+
+    @Test
+    fun `세트를 바꾸면 자동 넘김 끔 목록도 비워져 전부 기본(켬)으로 돌아간다`() {
+        val room = room(questionSetId = 10L)
+        room.overrideQuestionTimes(mapOf(1L to 20), autoAdvanceOff = listOf(1L, 3L))
 
         room.update("제목", null, null, 11L, null, false, null)
-        assertThat(room.questionAutoAdvance).isNull()
-        assertThat(room.isAutoAdvance(1L)).isFalse()
+
+        assertThat(room.questionAutoAdvanceOff).isNull()
+        assertThat(room.isAutoAdvance(1L)).isTrue()
     }
 
     @Test

@@ -82,6 +82,18 @@ class Participant(
         leftAt = at
     }
 
+    /**
+     * 나갔던 사람이 돌아옴. 점수·답안이 붙어 있는 원래 행을 되살린다 —
+     * 새 행을 만들면 랭킹과 리포트가 두 사람으로 갈라진다.
+     */
+    fun rejoin() {
+        if (status != ParticipantStatus.LEFT) {
+            throw BusinessException(ErrorCode.CONFLICT, "나간 참가자만 다시 들어올 수 있습니다.")
+        }
+        status = ParticipantStatus.JOINED
+        leftAt = null
+    }
+
     /** 호스트가 내보냄. */
     fun kick(at: LocalDateTime = LocalDateTime.now()) {
         verifyJoined()

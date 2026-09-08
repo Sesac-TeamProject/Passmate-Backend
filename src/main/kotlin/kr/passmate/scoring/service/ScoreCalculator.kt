@@ -21,8 +21,9 @@ data class ScoreResult(
  * - 정답: 배점 100% + 남은 시간 비율에 비례한 속도 보너스(최대 배점의 +50%)
  *   예) 100점 문항을 제한시간 절반 시점에 정답 → 100 + 100 × 0.5 × 0.5 = 125
  * - 오답·미제출: 0점
- * - 서술형: 제출 시 배점을 **속도 보너스 없이** 잠정 부여해 즉시 랭킹에 반영하고,
- *   AI 분석·첨삭이 확정되면 보정한다. 서술형에 속도 보너스를 주면 빨리 대충 쓴 쪽이 유리해진다
+ * - 서술형: 제출 시점에는 **0점**이고, 선생님 첨삭이 보정 점수를 주면 그때 반영된다.
+ *   예전에는 배점을 잠정 부여했지만 "잘 모르겠습니다"만 써도 만점을 받는 문제가 있었다
+ *   (시나리오 테스트, 2026-09-08 반전). 자동 채점이 없는 유형에 점수를 미리 주지 않는다
  */
 @Component
 class ScoreCalculator {
@@ -34,7 +35,7 @@ class ScoreCalculator {
         answer: String?,
         remainingRatio: BigDecimal,
     ): ScoreResult = when (type) {
-        QuestionType.ESSAY -> ScoreResult(isCorrect = null, baseScore = points, speedBonus = 0)
+        QuestionType.ESSAY -> ScoreResult(isCorrect = null, baseScore = 0, speedBonus = 0)
 
         QuestionType.MCQ, QuestionType.OX -> {
             val correct = answer != null && submitted.trim().equals(answer.trim(), ignoreCase = false)

@@ -103,15 +103,18 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
 
         assertThat(body.get("summary").get("participantCount").asInt()).isEqualTo(3)
         assertThat(body.get("summary").get("questionCount").asInt()).isEqualTo(2)
-        // 채점된 답안은 객관식 2건(정답 1·오답 1). 서술형은 채점 전이라 빠진다
-        assertThat(body.get("summary").get("avgCorrectRate").asDouble()).isEqualTo(50.0)
+        // 분모 = 참가자 전원(3) × 자동 채점 문항(객관식 1). 미제출 구경꾼도 오답으로 든다
+        assertThat(body.get("summary").get("avgCorrectRate").asDouble()).isEqualTo(100.0 / 3)
 
         val questions = body.get("questions")
         assertThat(questions).hasSize(2)
         assertThat(questions[0].get("orderNo").asInt()).isEqualTo(1)
         assertThat(questions[0].get("submitCount").asInt()).isEqualTo(2)
         assertThat(questions[0].get("correctCount").asInt()).isEqualTo(1)
-        assertThat(questions[0].get("correctRate").asDouble()).isEqualTo(50.0)
+        // 정답 1 / 참가자 3 — 제출자만 분모로 쓰면 혼자 테스트한 방에서 값이 부풀었다(2026-09-08)
+        assertThat(questions[0].get("correctRate").asDouble()).isEqualTo(100.0 / 3)
+        // 서술형은 자동 채점이 없어 정답률 자체가 없다 — 0% 로 주면 최난도 문항으로 잘못 뽑힌다
+        assertThat(questions[1].has("correctRate")).isFalse()
 
         val participants = body.get("participants")
         assertThat(participants).hasSize(3)
@@ -177,7 +180,8 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.questions[0].answer").value("찾을 수 없음"))
             .andExpect(jsonPath("$.questions[0].explanation").value("Not Found"))
-            .andExpect(jsonPath("$.questions[0].correctRate").value(100.0))
+            // 정답 1 / 참가자 3 — 참가자 전원이 분모다
+            .andExpect(jsonPath("$.questions[0].correctRate").value(100.0 / 3))
     }
 
     @Test
@@ -193,14 +197,14 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
 
         val mcq = body.get("questions")[0]
         assertThat(mcq.get("topic").asText()).isEqualTo("HTTP")
-        // 학생 정답·게스트 오답 → 반 정답률 50%. 방 리포트 문항별 탭과 같은 정의
-        assertThat(mcq.get("correctRate").asDouble()).isEqualTo(50.0)
+        // 학생 정답·게스트 오답·구경꾼 미제출 → 반 정답률 1/3. 방 리포트 문항별 탭과 같은 정의
+        assertThat(mcq.get("correctRate").asDouble()).isEqualTo(100.0 / 3)
         assertThat(mcq.get("elapsedMs").asLong()).isGreaterThanOrEqualTo(0)
 
         val essay = body.get("questions")[1]
-        // 주제를 안 적은 문항은 비어 있고, 서술형은 채점 전이라 반 정답률 0
+        // 주제를 안 적은 문항은 비어 있고, 서술형은 자동 채점이 없어 반 정답률도 없다
         assertThat(essay.has("topic")).isFalse()
-        assertThat(essay.get("correctRate").asDouble()).isEqualTo(0.0)
+        assertThat(essay.has("correctRate")).isFalse()
     }
 
     @Test

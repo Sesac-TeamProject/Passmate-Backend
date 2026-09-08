@@ -50,8 +50,6 @@ class SessionResultQueryService(
 
         val questionRows = m.sessionQuestions.map { sq ->
             val answers = m.answersBySessionQuestion[sq.id].orEmpty()
-            val graded = answers.filter { it.isCorrect != null }
-            val correct = graded.count { it.isCorrect == true }
             val question = m.questionsById[sq.questionId]
             QuestionResultRow(
                 sessionQuestionId = sq.id,
@@ -61,14 +59,13 @@ class SessionResultQueryService(
                 content = question.content,
                 points = question.points,
                 submitCount = answers.size,
-                correctCount = correct,
-                correctRate = SessionMaterials.percent(correct, graded.size),
+                correctCount = answers.count { it.isCorrect == true },
+                correctRate = m.correctRateOf(sq.id),
                 aiAnalysisCount = answers.count { analyzedByAnswer[it.id]?.analysis != null },
                 teacherComment = comments[sq.id],
             )
         }
 
-        val gradedAll = m.answers.filter { it.isCorrect != null }
         return SessionResultsResponse(
             roomId = roomId,
             title = room.title,
@@ -78,7 +75,12 @@ class SessionResultQueryService(
             summary = ResultSummary(
                 participantCount = m.participants.size,
                 questionCount = m.sessionQuestions.size,
-                avgCorrectRate = SessionMaterials.percent(gradedAll.count { it.isCorrect == true }, gradedAll.size),
+                // 참가자 전원 × 자동 채점 문항이 분모 — 미제출도 오답, 서술형은 집계 제외
+                // (제출·채점된 답안만 분모로 쓰면 안 푼 문제가 많을수록 값이 부풀었다 — 2026-09-08)
+                avgCorrectRate = SessionMaterials.percent(
+                    m.answers.count { it.isCorrect == true },
+                    m.participants.size * m.gradableQuestionCount,
+                ),
                 // 한 문제도 안 푼 사람도 분모에 넣는다 — 참여율이 낮으면 평균도 낮게 보여야 한다
                 avgScore = if (m.participants.isEmpty()) 0.0
                 else m.participants.sumOf { m.scoreOf(it.id) }.toDouble() / m.participants.size,

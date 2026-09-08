@@ -40,8 +40,11 @@ class ReportExportService(
             appendRow("참가자 수", m.participants.size.toString())
             appendRow("문항 수", m.sessionQuestions.size.toString())
 
-            val gradedAll = m.answers.filter { it.isCorrect != null }
-            appendRow("평균 정답률(%)", format2(percent(gradedAll.count { it.isCorrect == true }, gradedAll.size)))
+            // 참가자 전원 × 자동 채점 문항이 분모 — 결과 화면(ResultSummary)과 같은 정의
+            appendRow(
+                "평균 정답률(%)",
+                format2(percent(m.answers.count { it.isCorrect == true }, m.participants.size * m.gradableQuestionCount)),
+            )
             appendRow(
                 "평균 점수",
                 format2(
@@ -56,8 +59,6 @@ class ReportExportService(
             appendRow("순번", "유형", "문항", "배점", "제출", "정답", "정답률(%)", "AI 분석")
             m.sessionQuestions.forEach { sq ->
                 val answers = m.answersBySessionQuestion[sq.id].orEmpty()
-                val graded = answers.filter { it.isCorrect != null }
-                val correct = graded.count { it.isCorrect == true }
                 val question = m.questionsById[sq.questionId]
                 appendRow(
                     sq.orderNo.toString(),
@@ -65,8 +66,9 @@ class ReportExportService(
                     question?.content.orEmpty(),
                     question?.points?.toString().orEmpty(),
                     answers.size.toString(),
-                    correct.toString(),
-                    format2(percent(correct, graded.size)),
+                    answers.count { it.isCorrect == true }.toString(),
+                    // 서술형은 자동 채점이 없어 빈 칸 — 0% 로 적으면 가장 어려운 문항처럼 읽힌다
+                    m.correctRateOf(sq.id)?.let(::format2).orEmpty(),
                     answers.count { analyzed[it.id]?.analysis != null }.toString(),
                 )
             }
@@ -78,14 +80,14 @@ class ReportExportService(
                 .sortedBy { m.rankOf(it.id) }
                 .forEach { participant ->
                     val answers = m.answersOf(participant.id)
-                    val graded = answers.filter { it.isCorrect != null }
                     appendRow(
                         m.rankOf(participant.id).toString(),
                         participant.nickname,
                         m.scoreOf(participant.id).toString(),
                         m.correctCountOf(participant.id).toString(),
                         answers.size.toString(),
-                        format2(percent(m.correctCountOf(participant.id), graded.size)),
+                        // 문항 수 기준 — 학습 리포트 accuracy 와 같은 정의
+                        format2(m.accuracyOf(participant.id)),
                     )
                 }
         }

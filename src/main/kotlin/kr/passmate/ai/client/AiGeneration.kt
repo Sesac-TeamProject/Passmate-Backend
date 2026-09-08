@@ -68,6 +68,10 @@ data class GeneratedQuestion(
                 if (answer !in options) {
                     throw AiCallException("객관식 정답이 보기 안에 없습니다.", retryable = true)
                 }
+                // 지문에 정답 단어가 그대로 들어간 문항이 생성된 사례(시나리오 테스트, 2026-09-08)
+                if (leaksAnswerInContent()) {
+                    throw AiCallException("문항 지문에 정답이 그대로 들어 있습니다.", retryable = true)
+                }
             }
 
             QuestionType.OX ->
@@ -80,18 +84,28 @@ data class GeneratedQuestion(
                     throw AiCallException("서술형 모범답안이 비어 있습니다.", retryable = true)
                 }
                 // 모델이 모범답안을 content 에도 그대로 써 보내는 경우가 있다(2026-09-08, 세트 6 두 건).
-                // 문제와 답이 같으면 학생에게 답을 보여주는 셈이라 형식 오류로 취급해 재시도한다
-                if (normalized(content) == normalized(answer)) {
-                    throw AiCallException("서술형 문항 지문과 모범답안이 같습니다.", retryable = true)
+                // 같음만 보던 것을 포함까지 넓혔다 — 지문 끝에 답을 덧붙이는 변형도 답 노출이다
+                if (normalized(content) == normalized(answer) || leaksAnswerInContent()) {
+                    throw AiCallException("서술형 문항 지문에 모범답안이 들어 있습니다.", retryable = true)
                 }
             }
         }
+    }
+
+    /**
+     * 지문에 정답 표현이 그대로 들어 있는지. 두 글자 미만(예: 숫자 한 자리)은 우연히
+     * 겹칠 수 있어 보지 않는다 — OX 는 정답이 한 글자라 자연히 제외된다.
+     */
+    private fun leaksAnswerInContent(): Boolean {
+        val answerNorm = normalized(answer)
+        return answerNorm.length >= MIN_LEAK_LENGTH && normalized(content).contains(answerNorm)
     }
 
     private fun normalized(text: String): String = text.trim().replace(WHITESPACE, " ")
 
     private companion object {
         const val REQUIRED_CHOICES = 4
+        const val MIN_LEAK_LENGTH = 2
         val OX_ANSWERS = setOf("O", "X")
         val WHITESPACE = Regex("\\s+")
     }

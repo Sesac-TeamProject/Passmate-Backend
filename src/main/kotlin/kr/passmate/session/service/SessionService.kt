@@ -105,14 +105,7 @@ class SessionService(
         val room = ownedRoom(roomId, hostUserId)
         room.verifyRunning()
         val (_, questions) = questionSet(room, hostUserId)
-        currentRunning(roomId)?.let { closeQuestion(it, questions) }
-
-        room.close()
-        recordRoomResult(room)
-        eventPublisher.toRoom(roomId, SessionEventType.SESSION_ENDED, sessionQueryService.ranking(roomId))
-
-        // 개인 학습 리포트는 report 기능이 만든다. 직접 부르면 session ⇄ report 순환이라 이벤트로 끊는다
-        applicationEventPublisher.publishEvent(SessionEndedEvent(roomId))
+        endSession(room, questions)
     }
 
     /**
@@ -160,9 +153,27 @@ class SessionService(
         val questions = runCatching { questionSetQueryService.getDetail(room.questionSetId!!, room.hostUserId).second }
             .getOrNull() ?: return
         val nextOrderNo = sq.orderNo + 1
-        if (questions.none { it.orderNo == nextOrderNo }) return
+        if (questions.none { it.orderNo == nextOrderNo }) {
+            // 마지막 문항 — 더 열 문항이 없으면 세션을 정식 종료 플로우로 끝낸다.
+            // 호스트가 "세션 종료"를 누르지 않아도 결과 요약·리포트·SESSION_ENDED 까지 나간다
+            // (시나리오 테스트 "세션 종료가 명확하게 되지 않는다", 2026-09-08)
+            endSession(room, questions)
+            return
+        }
 
         openQuestion(room, nextOrderNo, questions)
+    }
+
+    /** 종료 공통 플로우 — 호스트의 "세션 종료"와 마지막 문항 자동 넘김이 같은 길을 탄다. */
+    private fun endSession(room: Room, questions: List<Question>) {
+        currentRunning(room.id)?.let { closeQuestion(it, questions) }
+
+        room.close()
+        recordRoomResult(room)
+        eventPublisher.toRoom(room.id, SessionEventType.SESSION_ENDED, sessionQueryService.ranking(room.id))
+
+        // 개인 학습 리포트는 report 기능이 만든다. 직접 부르면 session ⇄ report 순환이라 이벤트로 끊는다
+        applicationEventPublisher.publishEvent(SessionEndedEvent(room.id))
     }
 
     /**

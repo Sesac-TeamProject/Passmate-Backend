@@ -74,6 +74,41 @@ class GeneratedQuestionTest {
     }
 
     @Test
+    fun `서술형 지문에 모범답안이 포함돼도 재시도 대상이다`() {
+        // 지문 끝에 답을 덧붙이는 변형 — 같음 검사만으로는 놓친다(시나리오 테스트, 2026-09-08)
+        val answer = "마지막 위치에 삽입한 뒤 부모와 비교해 위로 올린다."
+
+        assertThatThrownBy {
+            essay(content = "힙 삽입 과정을 설명하시오. 참고: $answer", answer = answer).verifyConsistent()
+        }
+            .isInstanceOf(AiCallException::class.java)
+            .satisfies({ assertThat((it as AiCallException).retryable).isTrue() })
+    }
+
+    @Test
+    fun `객관식 지문에 정답 단어가 그대로 있으면 재시도 대상이다`() {
+        // "다음 중 라우터의 …" 처럼 지문이 답을 말해 주는 문항(시나리오 테스트, 2026-09-08)
+        val question = mcq(
+            choices = listOf("라우터", "스위치", "허브", "리피터"),
+            answer = "라우터",
+            content = "3계층 장비인 라우터는 무엇인가?",
+        )
+
+        assertThatThrownBy { question.verifyConsistent() }
+            .isInstanceOf(AiCallException::class.java)
+            .satisfies({ assertThat((it as AiCallException).retryable).isTrue() })
+    }
+
+    @Test
+    fun `한 글자 정답은 지문 포함 검사를 하지 않는다`() {
+        // 숫자·한 글자 답은 우연히 지문에 들어갈 수 있다 — 오탐으로 재시도를 태우지 않는다
+        assertThatCode {
+            mcq(choices = listOf("1", "2", "3", "4"), answer = "4", content = "2 + 2 는 몇인가? (보기 중 4지선다)")
+                .verifyConsistent()
+        }.doesNotThrowAnyException()
+    }
+
+    @Test
     fun `서술형 지문이 질문이고 모범답안이 다르면 통과한다`() {
         assertThatCode {
             essay(content = "힙에 값을 추가하는 과정을 설명하시오.", answer = "마지막 위치에 삽입한 뒤 부모와 비교해 위로 올린다.")
@@ -102,9 +137,9 @@ class GeneratedQuestionTest {
         difficulty = Difficulty.NORMAL,
     )
 
-    private fun mcq(choices: List<String>, answer: String) = GeneratedQuestion(
+    private fun mcq(choices: List<String>, answer: String, content: String = "다음 중 옳은 것은?") = GeneratedQuestion(
         type = QuestionType.MCQ,
-        content = "다음 중 옳은 것은?",
+        content = content,
         choices = choices,
         answer = answer,
         explanation = null,

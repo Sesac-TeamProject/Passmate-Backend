@@ -39,10 +39,10 @@ import org.springframework.transaction.annotation.Transactional
 /**
  * 첨삭 등록·수정. 객관식(100점) + 서술형(200점) 방을 한 바퀴 돌린다.
  *
- * 서술형은 제출만 하면 배점을 잠정으로 받으므로(FR-024), 보정으로 점수를 깎으면
+ * 서술형은 첨삭 전 0점(2026-09-08 반전)이라, 보정으로 점수를 주면
  * 등수가 실제로 뒤집힌다 — 그 파급까지 확인한다.
  *
- * 처음 점수: 민수 = 100+보너스+200, 지은 = 0+200
+ * 처음 점수: 민수 = 100+보너스(객관식 정답), 지은 = 0
  */
 @AutoConfigureMockMvc
 @Transactional
@@ -131,8 +131,8 @@ class TeacherReviewUpsertIntegrationTest : IntegrationTestSupport() {
         val body = review(hostToken, minsuEssayAnswerId, comment = "다시 보니 괜찮습니다")
             .andExpect(status().isOk).andReturn().json()
 
-        // 서술형은 제출만 해도 배점을 잠정으로 받는다
-        assertThat(body.get("finalScore").asInt()).isEqualTo(200)
+        // 서술형은 첨삭 전 0점이다 — 보정을 지우면 그 상태로 돌아간다
+        assertThat(body.get("finalScore").asInt()).isEqualTo(0)
         assertThat(body.get("review").has("adjustedScore")).isFalse()
     }
 
@@ -140,7 +140,7 @@ class TeacherReviewUpsertIntegrationTest : IntegrationTestSupport() {
     fun `코멘트만 달면 점수는 그대로다`() {
         review(hostToken, minsuEssayAnswerId, comment = "잘 썼습니다")
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.finalScore").value(200))
+            .andExpect(jsonPath("$.finalScore").value(0))
     }
 
     @Test
@@ -149,8 +149,9 @@ class TeacherReviewUpsertIntegrationTest : IntegrationTestSupport() {
         assertThat(myReport(minsuToken).get("finalRank").asInt()).isEqualTo(1)
         assertThat(myReport(jieunToken).get("finalRank").asInt()).isEqualTo(2)
 
-        // 민수 서술형을 0점으로 깎으면 지은(200점)이 앞선다
-        review(hostToken, minsuEssayAnswerId, adjustedScore = 0).andExpect(status().isOk)
+        // 지은 서술형에 200점을 주면 민수(100+보너스)를 앞선다
+        val jieunEssayAnswerId = answerQueryService.getMyAnswer(roomId, essayId, UserPrincipal(jieunId, false)).id
+        review(hostToken, jieunEssayAnswerId, adjustedScore = 200).andExpect(status().isOk)
 
         assertThat(myReport(minsuToken).get("finalRank").asInt()).isEqualTo(2)
         assertThat(myReport(jieunToken).get("finalRank").asInt()).isEqualTo(1)
@@ -161,11 +162,11 @@ class TeacherReviewUpsertIntegrationTest : IntegrationTestSupport() {
     fun `보정하면 방 평균 점수도 다시 계산된다`() {
         val before = roomRepository.findById(roomId).get().avgScore!!
 
-        review(hostToken, minsuEssayAnswerId, adjustedScore = 0).andExpect(status().isOk)
+        review(hostToken, minsuEssayAnswerId, adjustedScore = 200).andExpect(status().isOk)
 
         val after = roomRepository.findById(roomId).get().avgScore!!
-        // 200점이 빠졌으니 2명 평균으로 100점 낮아진다
-        assertThat(before.subtract(after).toInt()).isEqualTo(100)
+        // 200점이 더해졌으니 2명 평균으로 100점 높아진다
+        assertThat(after.subtract(before).toInt()).isEqualTo(100)
     }
 
     @Test

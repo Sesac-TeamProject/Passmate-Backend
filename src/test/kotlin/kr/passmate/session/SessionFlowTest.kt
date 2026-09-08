@@ -217,28 +217,29 @@ class SessionFlowTest : IntegrationTestSupport() {
         assertThat(first.get("ranking")[0].get("rank").asInt()).isEqualTo(1)
 
         next()
-        // 서술형은 제출만 해도 배점을 잠정으로 받는다 → 뒤집힌다
+        // 서술형은 첨삭 전 0점(2026-09-08 반전) — 순위는 그대로, 변동 값 0 이 실린다
         submit(guestToken, essayId, "연결지향 프로토콜입니다").andExpect(status().isCreated)
         endCurrent()
 
         val second = questionResult(guestToken, essayId).andExpect(status().isOk).andReturn().json()
         val byNickname = second.get("ranking").associateBy { it.get("nickname").asText() }
-        assertThat(byNickname["게스트"]!!.get("rank").asInt()).isEqualTo(1)
-        assertThat(byNickname["게스트"]!!.get("rankChange").asInt()).isEqualTo(1)     // 2위 → 1위
-        assertThat(byNickname["게스트2"]!!.get("rank").asInt()).isEqualTo(2)
-        assertThat(byNickname["게스트2"]!!.get("rankChange").asInt()).isEqualTo(-1)   // 1위 → 2위
+        assertThat(byNickname["게스트2"]!!.get("rank").asInt()).isEqualTo(1)
+        assertThat(byNickname["게스트2"]!!.get("rankChange").asInt()).isEqualTo(0)    // 변동 없음도 값으로 실린다
+        assertThat(byNickname["게스트"]!!.get("rank").asInt()).isEqualTo(2)
+        assertThat(byNickname["게스트"]!!.get("rankChange").asInt()).isEqualTo(0)
     }
 
     @Test
-    fun `서술형은 속도 보너스 없이 배점을 잠정으로 받는다`() {
+    fun `서술형은 첨삭 전까지 점수를 받지 않는다`() {
+        // "잘 모르겠습니다"만 써도 배점을 받던 잠정 만점의 반전(2026-09-08 시나리오 테스트)
         start()
         endCurrent()
         next()
 
-        submit(guestToken, essayId, "연결지향 프로토콜입니다")
+        submit(guestToken, essayId, "잘 모르겠습니다")
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.isCorrect").doesNotExist())
-            .andExpect(jsonPath("$.baseScore").value(200))
+            .andExpect(jsonPath("$.baseScore").value(0))
             .andExpect(jsonPath("$.speedBonus").value(0))
     }
 
@@ -279,6 +280,25 @@ class SessionFlowTest : IntegrationTestSupport() {
         assertThat(ranking[0].get("rank").asInt()).isEqualTo(1)
         assertThat(ranking[0].get("totalScore").asLong()).isGreaterThan(100)
         assertThat(a).isPositive()
+    }
+
+    @Test
+    fun `나간 참가자는 랭킹에 남고 강퇴만 빠진다`() {
+        // 결과 화면을 봤다가 나간 학생이 재조회(스냅샷 랭킹)에서 사라지던 문제(시나리오 테스트, 2026-09-08)
+        val leaver = participantService.join(roomId, null, JoinRoomRequest(nickname = "나간이"))
+        val kicked = participantService.join(roomId, null, JoinRoomRequest(nickname = "강퇴자"))
+        start()
+        submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+        submit(leaver.accessToken!!, mcqId, "성공").andExpect(status().isCreated)
+        submit(kicked.accessToken!!, mcqId, "성공").andExpect(status().isCreated)
+
+        participantService.leave(roomId, kr.passmate.common.security.GuestPrincipal(leaver.participant.id, roomId))
+        participantService.kick(roomId, kicked.participant.id, hostId)
+
+        val ranking = mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isOk).andReturn().json()
+        val nicknames = ranking.map { it.get("nickname").asText() }
+        assertThat(nicknames).contains("게스트", "나간이").doesNotContain("강퇴자")
     }
 
     @Test

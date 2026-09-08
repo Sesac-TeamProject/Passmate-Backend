@@ -1,6 +1,7 @@
 package kr.passmate.report.service
 
 import kr.passmate.question.domain.Question
+import kr.passmate.question.domain.QuestionType
 import kr.passmate.report.dto.TopicAccuracy
 import kr.passmate.room.domain.Participant
 import kr.passmate.room.domain.Room
@@ -73,10 +74,20 @@ class SessionMaterials(
     val topAccuracy: Double
         get() = participants.maxOfOrNull { accuracyOf(it.id) } ?: 0.0
 
-    /** 문항의 반 정답률(%). 채점된(정오가 있는) 답안이 분모 — 방 리포트 문항별 탭과 같은 정의 */
-    fun correctRateOf(sessionQuestionId: Long): Double {
-        val graded = answersBySessionQuestion[sessionQuestionId].orEmpty().filter { it.isCorrect != null }
-        return percent(graded.count { it.isCorrect == true }, graded.size)
+    /** 자동 채점 대상(비서술형) 문항 수 — 정답률 분모의 기준. 서술형은 첨삭 전 정오가 없다 */
+    val gradableQuestionCount: Int =
+        sessionQuestions.count { questionsById[it.questionId]?.type != QuestionType.ESSAY }
+
+    /**
+     * 문항의 반 정답률(%). 분모는 **참가자 전원** — 미제출도 오답으로 센다.
+     * 제출자만 분모로 쓰면 혼자 테스트한 방에서 값이 널뛰었다(시나리오 테스트, 2026-09-08).
+     * 서술형은 자동 채점이 없어 null — 0% 로 내보내면 "가장 어려운 문항"으로 잘못 뽑힌다.
+     */
+    fun correctRateOf(sessionQuestionId: Long): Double? {
+        val sq = sessionQuestionsById[sessionQuestionId] ?: return null
+        if (questionsById[sq.questionId]?.type == QuestionType.ESSAY) return null
+        val answers = answersBySessionQuestion[sessionQuestionId].orEmpty()
+        return percent(answers.count { it.isCorrect == true }, participants.size)
     }
 
     /** 문항이 열린 뒤 제출까지 걸린 시간(ms). 서버 시각끼리의 차라 클라이언트 시계와 무관하다 */
