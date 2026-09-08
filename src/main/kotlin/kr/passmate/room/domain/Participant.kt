@@ -115,6 +115,16 @@ class Participant(
         this.claimedAt = at
     }
 
+    /**
+     * 세션이 끝날 때 최종 점수·등수를 굳힌다(ERD `total_score`·`final_rank`).
+     * 첨삭으로 점수가 바뀌면 다시 부른다 — 게스트 기록 연동 응답이 이 값을 읽는데,
+     * 아무도 쓰지 않아 늘 0점·등수 없음으로 나가고 있었다(2026-09-09 시나리오 테스트).
+     */
+    fun recordResult(totalScore: Int, finalRank: Int) {
+        this.totalScore = totalScore
+        this.finalRank = finalRank
+    }
+
     private fun verifyJoined() {
         if (status != ParticipantStatus.JOINED) {
             throw BusinessException(ErrorCode.CONFLICT, "이미 방을 나간 참가자입니다.")
