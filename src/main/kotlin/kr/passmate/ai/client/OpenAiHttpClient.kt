@@ -180,6 +180,8 @@ class OpenAiHttpClient(
                 appendLine("- 구성: $plan (총 ${request.totalCount}문항, 이 순서대로)")
                 appendLine("- 난이도: ${request.difficulty.label}")
                 appendLine("- content 는 학생에게 보여줄 문항 지문(질문)입니다. 답이나 설명을 쓰는 자리가 아닙니다.")
+                // 지문 안에 정답 단어가 그대로 있던 사례(시나리오 테스트, 2026-09-08) — 명시 규칙 + 서버 검증 이중 방어
+                appendLine("- 정답(answer)에 해당하는 단어·표현을 content 에 그대로 쓰지 않습니다. 지문에 답이 보이면 문제가 성립하지 않습니다.")
                 appendLine("- 객관식(MCQ)은 보기 4개, 정답은 보기 중 하나와 글자까지 똑같아야 합니다.")
                 appendLine("- OX 의 정답은 반드시 \"O\" 또는 \"X\" 한 글자입니다.")
                 // 서술형만 단독으로 부르면 "content = 질문"이라는 맥락이 사라져 모델이 모범답안을 지문에도 썼다(2026-09-08)

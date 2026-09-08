@@ -84,6 +84,8 @@ class JoinedRoomIntegrationTest : IntegrationTestSupport() {
         playRoom("1교시")
 
         val room = joined().andExpect(status().isOk).andReturn().json().get("rooms").get("content").single()
+        // 끝난 방 PIN 은 다른 방이 쓰고 있을 수 있어 내보내지 않는다
+        assertThat(room.has("pin")).isFalse()
 
         assertThat(room.get("title").asText()).isEqualTo("1교시")
         assertThat(room.get("hostNickname").asText()).isEqualTo("민수쌤")
@@ -103,6 +105,8 @@ class JoinedRoomIntegrationTest : IntegrationTestSupport() {
 
         assertThat(row.get("status").asText()).isEqualTo("WAITING")
         assertThat(row.get("hasReport").asBoolean()).isFalse()
+        // 살아 있는 방은 PIN 을 준다 — 참여한 방 목록에서 바로 재입장한다(2026-09-08)
+        assertThat(row.get("pin").asText()).isEqualTo(room.pin)
         // non_null 직렬화라 아직 없는 성적은 필드째 빠진다
         assertThat(row.has("myScore")).isFalse()
     }

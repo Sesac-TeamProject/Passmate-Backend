@@ -81,15 +81,19 @@ class RoomService(
         if (duplicated.isNotEmpty()) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "같은 문항이 두 번 들어 있습니다: $duplicated")
         }
-        val known = questionSetQueryService.getDetail(setId, hostUserId).second.map { it.id }.toSet()
-        val unknown = questionIds.filterNot { it in known }
+        val defaults = questionSetQueryService.getDetail(setId, hostUserId).second
+            .associate { it.id to it.timeLimitSec }
+        val unknown = questionIds.filterNot { it in defaults }
         if (unknown.isNotEmpty()) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "이 방의 세트에 없는 문항입니다: $unknown")
         }
 
         room.overrideQuestionTimes(
-            times = request.times.associate { it.questionId to it.timeLimitSec },
-            autoAdvance = request.times.filter { it.autoAdvance }.map { it.questionId },
+            // 세트 기본값과 같은 시간은 저장하지 않는다 — 화면이 전 문항을 보내도 "덮어쓴 문항"만 남는다
+            times = request.times.filter { defaults[it.questionId] != it.timeLimitSec }
+                .associate { it.questionId to it.timeLimitSec },
+            // 기본이 켬이라 끈 문항만 저장한다 — 본문에서 빠진 문항은 자동으로 기본값(켬)이 된다
+            autoAdvanceOff = request.times.filterNot { it.autoAdvance }.map { it.questionId },
         )
         return room
     }

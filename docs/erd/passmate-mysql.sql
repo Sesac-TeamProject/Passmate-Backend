@@ -102,7 +102,7 @@ CREATE TABLE room (
   host_user_id BIGINT NOT NULL,
   question_set_id BIGINT NULL,
   question_time_overrides JSON NULL COMMENT '이 방에서만 쓰는 문항별 제한시간 {questionId: sec}. NULL = 세트 기본값',
-  question_auto_advance JSON NULL COMMENT '자동 넘김을 켠 문항 id 배열. NULL = 전부 꺼짐',
+  question_auto_advance_off JSON NULL COMMENT '자동 넘김을 끈 문항 id 배열. NULL = 전부 켬(기본)',
   title VARCHAR(100) NOT NULL,
   description VARCHAR(500) NULL,
   topic VARCHAR(50) NULL COMMENT '주제 태그(백엔드/CS 면접/네트워크 …)',

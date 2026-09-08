@@ -27,8 +27,8 @@ data class QuestionTimeEntry(
     @field:Max(600)
     val timeLimitSec: Int,
 
-    @field:Schema(description = "시간 만료로 마감되면 다음 문항을 자동으로 열지 (W-02b 토글)")
-    val autoAdvance: Boolean = false,
+    @field:Schema(description = "시간 만료로 마감되면 다음 문항을 자동으로 열지 (W-02b 토글). 기본 켬")
+    val autoAdvance: Boolean = true,
 )
 
 /** 정답·해설은 싣지 않는다 — 호스트 화면이지만 프로젝터에 그대로 뜰 수 있다. */

@@ -12,6 +12,8 @@ data class JoinedRoom(
     val title: String,
     val hostNickname: String,
     val status: RoomStatus,
+    @field:Schema(description = "진행 중인 방만 — 재입장 화면이 쓴다. 끝난 방은 null")
+    val pin: String?,
     val startedAt: LocalDateTime?,
     val endedAt: LocalDateTime?,
     val questionCount: Int,

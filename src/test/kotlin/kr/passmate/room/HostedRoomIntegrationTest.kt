@@ -126,6 +126,40 @@ class HostedRoomIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `목록의 평균 정답률은 리포트와 같은 분모다 — 참가자 전원 × 자동 채점 문항`() {
+        // 제출된 답안만 분모로 쓰면 목록은 20%, 리포트는 3.1% 처럼 같은 방이 두 값으로 보였다(시나리오 테스트, 2026-09-09)
+        val set = questionSetService.create(hostId, QuestionSetCreateRequest("혼합 세트"))
+        val mcq = questionSetService.addQuestion(
+            set.id, hostId,
+            QuestionRequest(QuestionType.MCQ, "404 는?", listOf("성공", "찾을 수 없음"), "찾을 수 없음", timeLimitSec = 30, points = 100),
+        ).id
+        questionSetService.addQuestion(
+            set.id, hostId,
+            QuestionRequest(QuestionType.ESSAY, "TCP 를 설명하시오", answer = "연결지향", timeLimitSec = 60, points = 200),
+        )
+        questionSetService.confirm(set.id, hostId)
+
+        val room = roomService.create(hostId, RoomCreateRequest(title = "혼합 방", type = RoomType.FREE))
+        roomService.update(room.id, hostId, RoomUpdateRequest(title = "혼합 방", questionSetId = set.id))
+        participantService.join(room.id, studentId, JoinRoomRequest(nickname = "학생"))
+        participantService.join(room.id, null, JoinRoomRequest(nickname = "구경꾼"))   // 한 문제도 안 낸다
+
+        host(post("/rooms/{id}/session/start", room.id)).andExpect(status().isNoContent)
+        mockMvc.perform(
+            post("/rooms/{id}/session/questions/{q}/answers", room.id, mcq)
+                .header(AUTH, "Bearer $studentToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(mapOf("submitted" to "찾을 수 없음"))),
+        ).andExpect(status().isCreated)
+        host(post("/rooms/{id}/session/end", room.id)).andExpect(status().isNoContent)
+
+        val ended = hosted().andExpect(status().isOk).andReturn().json().get("ended").single()
+        // 정답 1 / (참가자 2 × 자동 채점 문항 1) — 서술형은 분모에서 빠지고 미제출은 오답
+        assertThat(ended.get("correctRate").asDouble()).isEqualTo(50.0)
+        assertThat(ended.get("studentCount").asLong()).isEqualTo(2)
+    }
+
+    @Test
     fun `끝난 방은 학생 수와 평균 정답률이 함께 나온다`() {
         val roomId = playRoom("끝난 방")
 

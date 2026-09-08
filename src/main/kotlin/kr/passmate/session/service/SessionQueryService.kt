@@ -33,6 +33,9 @@ class SessionQueryService(
     private val answerRepository: AnswerRepository,
     private val roomStateRepository: RoomStateRepository,
 ) {
+    private companion object {
+        const val FIRST_ORDER_NO = 1
+    }
 
     /**
      * 랭킹. 점수는 답안 집계에서, 닉네임은 room 기능에서 각각 가져와 합친다.
@@ -55,6 +58,8 @@ class SessionQueryService(
      */
     fun rankingAsOf(roomId: Long, orderNo: Int): List<RankingEntry> {
         val current = toEntries(roomId, roomStateRepository.findRankingAsOf(roomId, orderNo))
+        // 1번 문항은 견줄 직전 시점이 없다 — 전원 0점 공동 1등을 "직전 순위"로 삼으면 변동이 지어내진다
+        if (orderNo <= FIRST_ORDER_NO) return current
         val previousRanks = toEntries(roomId, roomStateRepository.findRankingAsOf(roomId, orderNo - 1))
             .associate { it.participantId to it.rank }
 
@@ -63,15 +68,19 @@ class SessionQueryService(
         }
     }
 
-    /** 점수 목록에 닉네임을 붙이고 등수를 매긴다. 동점은 같은 등수로 묶는다(공동 3등 다음은 5등). */
+    /**
+     * 참가자 전원에 점수를 붙이고 등수를 매긴다. 동점은 같은 등수로 묶는다(공동 3등 다음은 5등).
+     *
+     * 답안이 없는 사람도 **0점으로 싣는다** — 점수 목록(답안 집계)만 돌면 한 문제도 안 낸 학생이
+     * 순위·"전체 N명"에서 통째로 빠져, 4명이 끝까지 앉아 있던 수업의 최종 순위가 1명으로 나왔다
+     * (2026-09-09 시나리오 테스트). 학습 리포트는 이미 전원에게 등수를 매기므로 그쪽과도 맞춘다.
+     * 나간 사람도 남긴다 — 결과 화면을 봤다가 나간 학생이 재조회에서 사라지면 안 된다. 강퇴만 뺀다.
+     */
     private fun toEntries(roomId: Long, scores: List<ParticipantScore>): List<RankingEntry> {
-        val participants = participantQueryService.listJoined(roomId).associateBy { it.id }
-        return scores
-            .mapNotNull { score ->
-                participants[score.participantId]?.let {
-                    RankingEntry(0, it.id, it.nickname, it.avatarId, score.totalScore)
-                }
-            }
+        val scoreOf = scores.associate { it.participantId to it.totalScore }
+        return participantQueryService.listRankable(roomId)
+            .map { RankingEntry(0, it.id, it.nickname, it.avatarId, scoreOf[it.id] ?: 0L) }
+            .sortedWith(compareByDescending<RankingEntry> { it.totalScore }.thenBy { it.participantId })
             .let { rows ->
                 var rank = 0
                 var prev: Long? = null

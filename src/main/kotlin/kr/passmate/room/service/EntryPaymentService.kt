@@ -125,7 +125,9 @@ class EntryPaymentService(
         val participant = participantId?.let { participantRepository.findById(it).orElse(null) } ?: return
         if (participant.status != ParticipantStatus.JOINED) return
         participant.leave()
-        room.decreaseParticipantCount()
+        room.syncParticipantCount(
+            participantRepository.countByRoomIdAndStatus(room.id, ParticipantStatus.JOINED),
+        )
     }
 
     /**

@@ -217,28 +217,29 @@ class SessionFlowTest : IntegrationTestSupport() {
         assertThat(first.get("ranking")[0].get("rank").asInt()).isEqualTo(1)
 
         next()
-        // 서술형은 제출만 해도 배점을 잠정으로 받는다 → 뒤집힌다
+        // 서술형은 첨삭 전 0점(2026-09-08 반전) — 순위는 그대로, 변동 값 0 이 실린다
         submit(guestToken, essayId, "연결지향 프로토콜입니다").andExpect(status().isCreated)
         endCurrent()
 
         val second = questionResult(guestToken, essayId).andExpect(status().isOk).andReturn().json()
         val byNickname = second.get("ranking").associateBy { it.get("nickname").asText() }
-        assertThat(byNickname["게스트"]!!.get("rank").asInt()).isEqualTo(1)
-        assertThat(byNickname["게스트"]!!.get("rankChange").asInt()).isEqualTo(1)     // 2위 → 1위
-        assertThat(byNickname["게스트2"]!!.get("rank").asInt()).isEqualTo(2)
-        assertThat(byNickname["게스트2"]!!.get("rankChange").asInt()).isEqualTo(-1)   // 1위 → 2위
+        assertThat(byNickname["게스트2"]!!.get("rank").asInt()).isEqualTo(1)
+        assertThat(byNickname["게스트2"]!!.get("rankChange").asInt()).isEqualTo(0)    // 변동 없음도 값으로 실린다
+        assertThat(byNickname["게스트"]!!.get("rank").asInt()).isEqualTo(2)
+        assertThat(byNickname["게스트"]!!.get("rankChange").asInt()).isEqualTo(0)
     }
 
     @Test
-    fun `서술형은 속도 보너스 없이 배점을 잠정으로 받는다`() {
+    fun `서술형은 첨삭 전까지 점수를 받지 않는다`() {
+        // "잘 모르겠습니다"만 써도 배점을 받던 잠정 만점의 반전(2026-09-08 시나리오 테스트)
         start()
         endCurrent()
         next()
 
-        submit(guestToken, essayId, "연결지향 프로토콜입니다")
+        submit(guestToken, essayId, "잘 모르겠습니다")
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.isCorrect").doesNotExist())
-            .andExpect(jsonPath("$.baseScore").value(200))
+            .andExpect(jsonPath("$.baseScore").value(0))
             .andExpect(jsonPath("$.speedBonus").value(0))
     }
 
@@ -279,6 +280,25 @@ class SessionFlowTest : IntegrationTestSupport() {
         assertThat(ranking[0].get("rank").asInt()).isEqualTo(1)
         assertThat(ranking[0].get("totalScore").asLong()).isGreaterThan(100)
         assertThat(a).isPositive()
+    }
+
+    @Test
+    fun `나간 참가자는 랭킹에 남고 강퇴만 빠진다`() {
+        // 결과 화면을 봤다가 나간 학생이 재조회(스냅샷 랭킹)에서 사라지던 문제(시나리오 테스트, 2026-09-08)
+        val leaver = participantService.join(roomId, null, JoinRoomRequest(nickname = "나간이"))
+        val kicked = participantService.join(roomId, null, JoinRoomRequest(nickname = "강퇴자"))
+        start()
+        submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+        submit(leaver.accessToken!!, mcqId, "성공").andExpect(status().isCreated)
+        submit(kicked.accessToken!!, mcqId, "성공").andExpect(status().isCreated)
+
+        participantService.leave(roomId, kr.passmate.common.security.GuestPrincipal(leaver.participant.id, roomId))
+        participantService.kick(roomId, kicked.participant.id, hostId)
+
+        val ranking = mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isOk).andReturn().json()
+        val nicknames = ranking.map { it.get("nickname").asText() }
+        assertThat(nicknames).contains("게스트", "나간이").doesNotContain("강퇴자")
     }
 
     @Test
@@ -342,6 +362,25 @@ class SessionFlowTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `세션이 끝나면 참가자 행에 최종 점수와 등수가 남는다`() {
+        // 게스트 기록 연동 응답이 이 컬럼을 읽는데 아무도 쓰지 않아 늘 0점이었다(시나리오 테스트, 2026-09-09)
+        val scorer = participantService.join(roomId, null, JoinRoomRequest(nickname = "득점자"))
+        start()
+        submit(scorer.accessToken!!, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+        mockMvc.perform(post("/rooms/{id}/session/end", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isNoContent)
+
+        val first = participantService.getParticipant(scorer.participant.id)
+        assertThat(first.totalScore).isGreaterThan(100)
+        assertThat(first.finalRank).isEqualTo(1)
+        // 한 문제도 안 낸 "게스트"도 0점 2등으로 남는다 — 랭킹과 같은 등수 규칙
+        val guestId = (jwtTokenProvider.parseAuthToken(guestToken) as kr.passmate.common.security.GuestPrincipal).participantId
+        val idle = participantService.getParticipant(guestId)
+        assertThat(idle.totalScore).isZero()
+        assertThat(idle.finalRank).isEqualTo(2)
+    }
+
+    @Test
     fun `현재 문항 마감은 호스트만 할 수 있다`() {
         val other = jwtTokenProvider.issue(member("sess-other2"), false).accessToken
         start()
@@ -369,12 +408,15 @@ class SessionFlowTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `참가자도 랭킹을 볼 수 있고 제출 전에는 비어 있다`() {
+    fun `참가자도 랭킹을 볼 수 있고 제출 전에는 전원 0점 공동 1등이다`() {
         start()
 
+        // 답안이 없어도 순위에 있다 — 참가자 전원이 0점으로 나란히 선다
         mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $guestToken"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.length()").value(0))
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].rank").value(1))
+            .andExpect(jsonPath("$[0].totalScore").value(0))
 
         submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
 
@@ -383,6 +425,25 @@ class SessionFlowTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.length()").value(1))
             .andExpect(jsonPath("$[0].rank").value(1))
             .andExpect(jsonPath("$[0].nickname").value("게스트"))
+    }
+
+    @Test
+    fun `한 문제도 안 낸 학생도 랭킹에 0점으로 남는다`() {
+        // 4명이 끝까지 앉아 있었는데 최종 순위가 답안 낸 1명뿐이던 문제(시나리오 테스트, 2026-09-09).
+        // 학습 리포트는 전원에게 등수를 매기므로 랭킹도 같은 사람 수를 보여야 한다
+        val idle = participantService.join(roomId, null, JoinRoomRequest(nickname = "구경꾼"))
+        start()
+        submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+
+        val ranking = mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isOk).andReturn().json()
+        val byNickname = ranking.associateBy { it.get("nickname").asText() }
+
+        assertThat(byNickname.keys).containsExactlyInAnyOrder("게스트", "구경꾼")
+        assertThat(byNickname["게스트"]!!.get("rank").asInt()).isEqualTo(1)
+        assertThat(byNickname["구경꾼"]!!.get("rank").asInt()).isEqualTo(2)
+        assertThat(byNickname["구경꾼"]!!.get("totalScore").asLong()).isZero()
+        assertThat(byNickname["구경꾼"]!!.get("participantId").asLong()).isEqualTo(idle.participant.id)
     }
 
     @Test

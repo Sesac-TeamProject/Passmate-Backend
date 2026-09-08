@@ -117,21 +117,38 @@ class RoomQuestionTimeIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `자동 넘김 토글이 저장되고 빠진 문항은 꺼진다`() {
-        // W-02b 의 "자동 넘김" 열 — 시간과 같은 화면에서 함께 저장된다(2026-09-07 결정)
-        putTimes(hostToken, """{"times":[{"questionId":$mcqId,"timeLimitSec":20,"autoAdvance":true},{"questionId":$essayId,"timeLimitSec":90}]}""")
+    fun `자동 넘김은 기본 켬이고 끈 문항만 저장된다`() {
+        // 설정을 한 번도 안 만졌으면 전부 켬 (2026-09-08 시나리오 테스트 반전)
+        getTimes(hostToken)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.questions[0].autoAdvance").value(true))
+            .andExpect(jsonPath("$.questions[1].autoAdvance").value(true))
+
+        putTimes(hostToken, """{"times":[{"questionId":$mcqId,"timeLimitSec":20,"autoAdvance":false},{"questionId":$essayId,"timeLimitSec":90}]}""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.questions[0].autoAdvance").value(false))
+            // autoAdvance 를 생략한 문항은 기본값(켬)
+            .andExpect(jsonPath("$.questions[1].autoAdvance").value(true))
+
+        // 전체 교체 — 본문에서 빠진 문항은 기본값(켬)으로 돌아간다
+        putTimes(hostToken, """{"times":[{"questionId":$essayId,"timeLimitSec":90,"autoAdvance":false}]}""")
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.questions[0].autoAdvance").value(true))
             .andExpect(jsonPath("$.questions[1].autoAdvance").value(false))
 
-        // 전체 교체 — 본문에서 빠지면 자동 넘김도 꺼진다
-        putTimes(hostToken, """{"times":[{"questionId":$essayId,"timeLimitSec":90,"autoAdvance":true}]}""")
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.questions[0].autoAdvance").value(false))
-            .andExpect(jsonPath("$.questions[1].autoAdvance").value(true))
-
         getTimes(hostToken)
-            .andExpect(jsonPath("$.questions[1].autoAdvance").value(true))
+            .andExpect(jsonPath("$.questions[0].autoAdvance").value(true))
+            .andExpect(jsonPath("$.questions[1].autoAdvance").value(false))
+    }
+
+    @Test
+    fun `세트 기본값과 같은 시간은 덮어쓴 문항으로 남지 않는다`() {
+        // 화면이 전 문항을 그대로 보내는 경우 — 값이 기본과 같으면 오버라이드가 아니다
+        putTimes(hostToken, """{"times":[{"questionId":$mcqId,"timeLimitSec":30},{"questionId":$essayId,"timeLimitSec":90}]}""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.questions[0].timeLimitSec").value(30))
+            .andExpect(jsonPath("$.questions[0].overridden").value(false))
+            .andExpect(jsonPath("$.questions[1].overridden").value(true))
     }
 
     @Test

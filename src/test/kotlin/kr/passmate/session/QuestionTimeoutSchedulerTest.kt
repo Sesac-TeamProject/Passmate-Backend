@@ -41,8 +41,9 @@ class QuestionTimeoutSchedulerTest : IntegrationTestSupport() {
     @Autowired private lateinit var jdbcTemplate: JdbcTemplate
 
     @Test
-    fun `자동 넘김이 켜진 문항은 마감 뒤 결과 표시 시간이 지나면 다음 문항이 자동으로 열린다`() {
-        val roomId = runningRoom(questionCount = 2, autoAdvanceFirst = true)
+    fun `자동 넘김은 기본 켬 — 마감 뒤 결과 표시 시간이 지나면 다음 문항이 자동으로 열린다`() {
+        // 호스트가 타이밍 화면을 안 건드려도 자동 넘김이 돈다(2026-09-08 기본값 반전)
+        val roomId = runningRoom(questionCount = 2)
         val (first, second) = sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(roomId)
 
         expire(first.id)
@@ -60,7 +61,7 @@ class QuestionTimeoutSchedulerTest : IntegrationTestSupport() {
 
         assertThat(sessionQuestionRepository.findById(second.id).orElseThrow().startedAt).isNotNull()
 
-        // 마지막 문항이라 더 넘어갈 곳이 없다 — 다음 틱이 아무것도 하지 않는다(폴링이 지난 세션을 집지 않게)
+        // 마지막 문항 — 더 열 문항이 없으면 세션을 자동 종료한다(시나리오 테스트 "세션 종료 명확화")
         expire(second.id)
         scheduler.closeExpiredQuestions()
         jdbcTemplate.update(
@@ -68,12 +69,16 @@ class QuestionTimeoutSchedulerTest : IntegrationTestSupport() {
             LocalDateTime.now().minusSeconds(60), second.id,
         )
         scheduler.closeExpiredQuestions()
+
+        val status = jdbcTemplate.queryForObject("select status from room where id = ?", String::class.java, roomId)
+        assertThat(status).isEqualTo("ENDED")
+        // 끝난 방은 다음 틱의 대상에서도 빠진다 — 폴링이 지난 세션을 계속 집지 않는다
         assertThat(sessionQuestionRepository.findAutoAdvanceDue(LocalDateTime.now())).isEmpty()
     }
 
     @Test
-    fun `자동 넘김이 꺼진 문항은 마감돼도 다음 문항이 열리지 않는다`() {
-        val roomId = runningRoom(questionCount = 2, autoAdvanceFirst = false)
+    fun `자동 넘김을 끈 문항은 마감돼도 다음 문항이 열리지 않는다`() {
+        val roomId = runningRoom(questionCount = 2, autoAdvanceOffAll = true)
         val (first, second) = sessionQuestionRepository.findAllByRoomIdOrderByOrderNoAsc(roomId)
 
         expire(first.id)
@@ -117,8 +122,8 @@ class QuestionTimeoutSchedulerTest : IntegrationTestSupport() {
         )
     }
 
-    /** OX 문항 [questionCount]개짜리 방을 만들고 세션을 시작한다. */
-    private fun runningRoom(questionCount: Int = 1, autoAdvanceFirst: Boolean = false): Long {
+    /** OX 문항 [questionCount]개짜리 방을 만들고 세션을 시작한다. 자동 넘김은 기본 켬 상태다. */
+    private fun runningRoom(questionCount: Int = 1, autoAdvanceOffAll: Boolean = false): Long {
         val key = "timeout-${System.nanoTime()}"
         val hostId = userService.loginOrRegister(AuthProvider.GOOGLE, key, null, "호스트", null).user.id
 
@@ -133,10 +138,12 @@ class QuestionTimeoutSchedulerTest : IntegrationTestSupport() {
 
         val room = roomService.create(hostId, RoomCreateRequest(title = "타이머", type = RoomType.FREE))
         roomService.update(room.id, hostId, RoomUpdateRequest(title = "타이머", questionSetId = set.id))
-        if (autoAdvanceFirst) {
+        if (autoAdvanceOffAll) {
             roomService.updateQuestionTimes(
                 room.id, hostId,
-                RoomQuestionTimesRequest(listOf(QuestionTimeEntry(questionIds.first(), timeLimitSec = 5, autoAdvance = true))),
+                RoomQuestionTimesRequest(
+                    questionIds.map { QuestionTimeEntry(it, timeLimitSec = 5, autoAdvance = false) },
+                ),
             )
         }
         sessionService.start(room.id, hostId)
