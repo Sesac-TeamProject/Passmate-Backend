@@ -389,12 +389,15 @@ class SessionFlowTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `참가자도 랭킹을 볼 수 있고 제출 전에는 비어 있다`() {
+    fun `참가자도 랭킹을 볼 수 있고 제출 전에는 전원 0점 공동 1등이다`() {
         start()
 
+        // 답안이 없어도 순위에 있다 — 참가자 전원이 0점으로 나란히 선다
         mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $guestToken"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.length()").value(0))
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].rank").value(1))
+            .andExpect(jsonPath("$[0].totalScore").value(0))
 
         submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
 
@@ -403,6 +406,25 @@ class SessionFlowTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.length()").value(1))
             .andExpect(jsonPath("$[0].rank").value(1))
             .andExpect(jsonPath("$[0].nickname").value("게스트"))
+    }
+
+    @Test
+    fun `한 문제도 안 낸 학생도 랭킹에 0점으로 남는다`() {
+        // 4명이 끝까지 앉아 있었는데 최종 순위가 답안 낸 1명뿐이던 문제(시나리오 테스트, 2026-09-09).
+        // 학습 리포트는 전원에게 등수를 매기므로 랭킹도 같은 사람 수를 보여야 한다
+        val idle = participantService.join(roomId, null, JoinRoomRequest(nickname = "구경꾼"))
+        start()
+        submit(guestToken, mcqId, "찾을 수 없음").andExpect(status().isCreated)
+
+        val ranking = mockMvc.perform(get("/rooms/{id}/session/ranking", roomId).header("Authorization", "Bearer $hostToken"))
+            .andExpect(status().isOk).andReturn().json()
+        val byNickname = ranking.associateBy { it.get("nickname").asText() }
+
+        assertThat(byNickname.keys).containsExactlyInAnyOrder("게스트", "구경꾼")
+        assertThat(byNickname["게스트"]!!.get("rank").asInt()).isEqualTo(1)
+        assertThat(byNickname["구경꾼"]!!.get("rank").asInt()).isEqualTo(2)
+        assertThat(byNickname["구경꾼"]!!.get("totalScore").asLong()).isZero()
+        assertThat(byNickname["구경꾼"]!!.get("participantId").asLong()).isEqualTo(idle.participant.id)
     }
 
     @Test
