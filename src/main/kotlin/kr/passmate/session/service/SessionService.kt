@@ -10,10 +10,13 @@ import kr.passmate.question.service.QuestionSetQueryService
 import kr.passmate.room.domain.Room
 import kr.passmate.room.domain.RoomStatus
 import kr.passmate.room.repository.RoomRepository
+import kr.passmate.room.service.ParticipantFinalResult
+import kr.passmate.room.service.ParticipantService
 import kr.passmate.session.domain.SessionEventType
 import kr.passmate.session.domain.SessionQuestion
 import kr.passmate.session.dto.QuestionEndedPayload
 import kr.passmate.session.dto.QuestionStartedPayload
+import kr.passmate.session.dto.RankingEntry
 import kr.passmate.session.dto.ScreenLockPayload
 import kr.passmate.session.repository.RoomStateRepository
 import kr.passmate.session.repository.SessionQuestionRepository
@@ -36,6 +39,7 @@ class SessionService(
     private val questionSetQueryService: QuestionSetQueryService,
     private val roomStateRepository: RoomStateRepository,
     private val sessionQueryService: SessionQueryService,
+    private val participantService: ParticipantService,
     private val eventPublisher: SessionEventPublisher,
     private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
@@ -170,7 +174,9 @@ class SessionService(
 
         room.close()
         recordRoomResult(room)
-        eventPublisher.toRoom(room.id, SessionEventType.SESSION_ENDED, sessionQueryService.ranking(room.id))
+        val ranking = sessionQueryService.ranking(room.id)
+        recordParticipantResults(room.id, ranking)
+        eventPublisher.toRoom(room.id, SessionEventType.SESSION_ENDED, ranking)
 
         // 개인 학습 리포트는 report 기능이 만든다. 직접 부르면 session ⇄ report 순환이라 이벤트로 끊는다
         applicationEventPublisher.publishEvent(SessionEndedEvent(room.id))
@@ -189,6 +195,15 @@ class SessionService(
         val room = roomRepository.findById(event.roomId).orElse(null) ?: return
         if (room.status != RoomStatus.ENDED) return
         recordRoomResult(room)
+        recordParticipantResults(room.id, sessionQueryService.ranking(room.id))
+    }
+
+    /** 최종 점수·등수는 참가자 행에도 굳힌다 — 게스트 기록 연동 응답이 그 컬럼을 읽는다 */
+    private fun recordParticipantResults(roomId: Long, ranking: List<RankingEntry>) {
+        participantService.recordFinalResults(
+            roomId,
+            ranking.map { ParticipantFinalResult(it.participantId, it.totalScore.toInt(), it.rank) },
+        )
     }
 
     // ---------- 내부 ----------
