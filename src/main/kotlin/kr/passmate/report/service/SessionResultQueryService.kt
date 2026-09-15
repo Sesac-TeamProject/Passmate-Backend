@@ -85,6 +85,12 @@ class SessionResultQueryService(
                 avgScore = if (m.participants.isEmpty()) 0.0
                 else m.participants.sumOf { m.scoreOf(it.id) }.toDouble() / m.participants.size,
                 aiAnalysisCount = answerFeedbackQueryService.countAnalyzed(m.answers.map { it.id }),
+                submittedParticipantCount = m.submittedParticipantCount,
+                completionRate = m.completionRate,
+                avgElapsedMs = m.avgElapsedMs,
+                essayAnswerCount = m.essayAnswers.size,
+                // "채점됨"의 기준은 선생님 첨삭 — AI 분석은 참고 자료일 뿐 점수를 확정하지 않는다
+                essayReviewedCount = m.essayAnswers.count { analyzedByAnswer[it.id]?.teacherReview != null },
             ),
             questions = questionRows,
             participants = m.participants.map { participant ->

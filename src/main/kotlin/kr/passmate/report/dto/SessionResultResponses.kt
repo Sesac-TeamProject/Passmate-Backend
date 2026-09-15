@@ -20,6 +20,16 @@ data class ResultSummary(
     val avgScore: Double,
     @field:Schema(description = "분석이 끝난 건수. 진행 중·실패는 세지 않는다")
     val aiAnalysisCount: Int,
+    @field:Schema(description = "한 문항이라도 제출한 참가자 수 — 요약 KPI \"제출 n / 전체\"")
+    val submittedParticipantCount: Int,
+    @field:Schema(description = "전 문항을 제출한 참가자 비율(%). 분모 = 참가자 전원")
+    val completionRate: Double,
+    @field:Schema(description = "참가자별 총 소요 시간의 평균(ms). 제출 기록이 없으면 null")
+    val avgElapsedMs: Long?,
+    @field:Schema(description = "서술형 답안 수 — \"서술형 채점 n/m\" 의 분모")
+    val essayAnswerCount: Int,
+    @field:Schema(description = "첨삭이 끝난 서술형 답안 수")
+    val essayReviewedCount: Int,
 )
 
 /** 문항별 정답률 (W-07 문항별 탭). */

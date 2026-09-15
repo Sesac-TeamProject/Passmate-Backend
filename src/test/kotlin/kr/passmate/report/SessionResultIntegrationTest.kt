@@ -105,6 +105,13 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
         assertThat(body.get("summary").get("questionCount").asInt()).isEqualTo(2)
         // 분모 = 참가자 전원(3) × 자동 채점 문항(객관식 1). 미제출 구경꾼도 오답으로 든다
         assertThat(body.get("summary").get("avgCorrectRate").asDouble()).isEqualTo(100.0 / 3)
+        // 리포트 KPI (시연 2026-09-15 "제출·완주율·평균 소요·서술형 채점 미표시") —
+        // 제출 = 학생·게스트 2명, 완주(2문항 전부) = 학생 1명, 서술형 답안 1건은 아직 첨삭 전
+        assertThat(body.get("summary").get("submittedParticipantCount").asInt()).isEqualTo(2)
+        assertThat(body.get("summary").get("completionRate").asDouble()).isEqualTo(100.0 / 3)
+        assertThat(body.get("summary").get("avgElapsedMs").asLong()).isGreaterThanOrEqualTo(0)
+        assertThat(body.get("summary").get("essayAnswerCount").asInt()).isEqualTo(1)
+        assertThat(body.get("summary").get("essayReviewedCount").asInt()).isZero()
 
         val questions = body.get("questions")
         assertThat(questions).hasSize(2)
@@ -122,6 +129,19 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
         // 아무것도 내지 않은 참가자도 0점으로 줄에 남는다
         assertThat(participants.last().get("totalScore").asLong()).isZero()
         assertThat(participants.last().get("submitCount").asInt()).isZero()
+    }
+
+    @Test
+    fun `아무도 제출하지 않은 방은 평균 소요가 없다`() {
+        start()
+        endSession()
+
+        val summary = results(hostToken).andExpect(status().isOk).andReturn().json().get("summary")
+
+        assertThat(summary.get("submittedParticipantCount").asInt()).isZero()
+        assertThat(summary.get("completionRate").asDouble()).isZero()
+        // non_null 직렬화 — 잰 값이 없으면 키 자체가 빠진다. 0ms 와 "기록 없음"은 다르다
+        assertThat(summary.has("avgElapsedMs")).isFalse()
     }
 
     @Test
@@ -270,6 +290,11 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
         // 사람이 본 것과 기계가 본 것은 필드가 다르다 — 첨삭만 있고 AI 분석은 없다
         assertThat(essay.has("analysis")).isFalse()
         assertThat(essay.get("analysisStatus").asText()).isEqualTo("NOT_REQUESTED")
+
+        // 첨삭이 저장되면 요약의 "서술형 채점"도 1/1 로 오른다
+        val summary = results(hostToken).andReturn().json().get("summary")
+        assertThat(summary.get("essayReviewedCount").asInt()).isEqualTo(1)
+        assertThat(summary.get("essayAnswerCount").asInt()).isEqualTo(1)
     }
 
     @Test
