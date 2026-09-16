@@ -63,6 +63,7 @@ passmate:
     charge-amount-max: 1000000         # 코인 충전 1회 상한 (오입력·악용 방지)
     settlement-min-amount: 10000       # 최소 정산액 (원)
     ai-free-limit: 5                   # AI 문항 생성 무료 횟수 (호스트, 누적 — 명세 "최초 5회 무료")
+    material-max-upload-mb: 10         # 강의자료 첨부 1건 최대 크기(MB). 본문만 뽑고 파일은 보관하지 않는다
     essay-analysis-free-limit: 5       # 월 서술형 AI 분석 무료 횟수 (학생, FR-075)
     essay-analysis-coin-cost: 100      # 무료 한도 초과 시 분석 1건당 차감 코인 (1 C = 1원)
     rating-window-hours: 24            # 종료 후 평가 가능 시간

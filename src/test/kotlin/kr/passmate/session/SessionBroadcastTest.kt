@@ -159,6 +159,14 @@ class SessionBroadcastTest : IntegrationTestSupport() {
         assertThat(ranking).hasSize(1)
         assertThat(ranking[0]["rankChange"]).isEqualTo(0)
 
+        // 세션 종료 랭킹에도 마지막 문항 대비 변동이 실린다 —
+        // ranking() 으로 보내면 종료 화면에 오는 순간 변동 표시가 사라진다(시연 2026-09-15)
+        sessionService.end(room.id, hostId)
+        @Suppress("UNCHECKED_CAST")
+        val finalRanking = drainUntil(received, "SESSION_ENDED")["payload"] as List<Map<String, Any?>>
+        assertThat(finalRanking).hasSize(1)
+        assertThat(finalRanking[0]).containsKey("rankChange")
+
         session.disconnect()
     }
 

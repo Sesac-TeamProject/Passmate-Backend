@@ -87,6 +87,7 @@ class AnswerFeedbackQueryService(
             analysis = feedback?.let { EssayAnalysisView.from(it) },
             teacherReview = review?.let { TeacherReviewView.from(it) },
             remainingFreeAnalysis = userId?.let { essayAnalysisService.remainingFreeCount(it) },
+            freeAnalysisLimit = policy.essayAnalysisFreeLimit,
             analysisCoinCost = policy.essayAnalysisCoinCost,
         )
     }

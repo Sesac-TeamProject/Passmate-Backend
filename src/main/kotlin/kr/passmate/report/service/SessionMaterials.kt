@@ -78,6 +78,24 @@ class SessionMaterials(
     val gradableQuestionCount: Int =
         sessionQuestions.count { questionsById[it.questionId]?.type != QuestionType.ESSAY }
 
+    /** 한 문항이라도 제출한 참가자 수 — 요약 KPI "제출 n / 전체" */
+    val submittedParticipantCount: Int =
+        participants.count { answersOf(it.id).isNotEmpty() }
+
+    /** 전 문항을 제출한 참가자 비율(%) — "완주율". 출제된 문항이 없으면 잴 수 없어 0 */
+    val completionRate: Double =
+        if (sessionQuestions.isEmpty()) 0.0
+        else percent(participants.count { answersOf(it.id).size >= sessionQuestions.size }, participants.size)
+
+    /** 참가자별 총 소요 시간의 평균(ms). 아무도 제출하지 않았으면 null — 0ms 와 "기록 없음"은 다르다 */
+    val avgElapsedMs: Long? =
+        participants.mapNotNull { elapsedMsOf(it.id) }.takeIf { it.isNotEmpty() }?.average()?.toLong()
+
+    /** 서술형 문항에 제출된 답안 — "서술형 채점 n/m" 의 분모 */
+    val essayAnswers: List<Answer> = answers.filter {
+        questionsById[sessionQuestionsById[it.sessionQuestionId]?.questionId]?.type == QuestionType.ESSAY
+    }
+
     /**
      * 문항의 반 정답률(%). 분모는 **참가자 전원** — 미제출도 오답으로 센다.
      * 제출자만 분모로 쓰면 혼자 테스트한 방에서 값이 널뛰었다(시나리오 테스트, 2026-09-08).

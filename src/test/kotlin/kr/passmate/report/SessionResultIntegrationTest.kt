@@ -105,6 +105,13 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
         assertThat(body.get("summary").get("questionCount").asInt()).isEqualTo(2)
         // 분모 = 참가자 전원(3) × 자동 채점 문항(객관식 1). 미제출 구경꾼도 오답으로 든다
         assertThat(body.get("summary").get("avgCorrectRate").asDouble()).isEqualTo(100.0 / 3)
+        // 리포트 KPI (시연 2026-09-15 "제출·완주율·평균 소요·서술형 채점 미표시") —
+        // 제출 = 학생·게스트 2명, 완주(2문항 전부) = 학생 1명, 서술형 답안 1건은 아직 첨삭 전
+        assertThat(body.get("summary").get("submittedParticipantCount").asInt()).isEqualTo(2)
+        assertThat(body.get("summary").get("completionRate").asDouble()).isEqualTo(100.0 / 3)
+        assertThat(body.get("summary").get("avgElapsedMs").asLong()).isGreaterThanOrEqualTo(0)
+        assertThat(body.get("summary").get("essayAnswerCount").asInt()).isEqualTo(1)
+        assertThat(body.get("summary").get("essayReviewedCount").asInt()).isZero()
 
         val questions = body.get("questions")
         assertThat(questions).hasSize(2)
@@ -116,12 +123,37 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
         // 서술형은 자동 채점이 없어 정답률 자체가 없다 — 0% 로 주면 최난도 문항으로 잘못 뽑힌다
         assertThat(questions[1].has("correctRate")).isFalse()
 
+        // 우측 패널 재료 (시연 2026-09-16) — 객관식·OX 는 정답·해설, 서술형은 채점 분포
+        assertThat(questions[0].get("answer").asText()).isEqualTo("찾을 수 없음")
+        assertThat(questions[0].get("explanation").asText()).isEqualTo("Not Found")
+        assertThat(questions[0].has("essayGrading")).isFalse()
+        // 학생 1명이 냈고 아직 첨삭 전 — 오답(0점)이 아니라 미채점으로 센다
+        val grading = questions[1].get("essayGrading")
+        assertThat(grading.get("unreviewed").asInt()).isEqualTo(1)
+        assertThat(grading.get("full").asInt()).isZero()
+        assertThat(grading.get("zero").asInt()).isZero()
+        // 분석 요청이 없었으니 집계도 없다
+        assertThat(questions[1].has("aiInsight")).isFalse()
+
         val participants = body.get("participants")
         assertThat(participants).hasSize(3)
         assertThat(participants[0].get("rank").asInt()).isEqualTo(1)
         // 아무것도 내지 않은 참가자도 0점으로 줄에 남는다
         assertThat(participants.last().get("totalScore").asLong()).isZero()
         assertThat(participants.last().get("submitCount").asInt()).isZero()
+    }
+
+    @Test
+    fun `아무도 제출하지 않은 방은 평균 소요가 없다`() {
+        start()
+        endSession()
+
+        val summary = results(hostToken).andExpect(status().isOk).andReturn().json().get("summary")
+
+        assertThat(summary.get("submittedParticipantCount").asInt()).isZero()
+        assertThat(summary.get("completionRate").asDouble()).isZero()
+        // non_null 직렬화 — 잰 값이 없으면 키 자체가 빠진다. 0ms 와 "기록 없음"은 다르다
+        assertThat(summary.has("avgElapsedMs")).isFalse()
     }
 
     @Test
@@ -270,6 +302,16 @@ class SessionResultIntegrationTest : IntegrationTestSupport() {
         // 사람이 본 것과 기계가 본 것은 필드가 다르다 — 첨삭만 있고 AI 분석은 없다
         assertThat(essay.has("analysis")).isFalse()
         assertThat(essay.get("analysisStatus").asText()).isEqualTo("NOT_REQUESTED")
+
+        // 첨삭이 저장되면 요약의 "서술형 채점"도 1/1 로 오른다
+        val results = results(hostToken).andReturn().json()
+        val summary = results.get("summary")
+        assertThat(summary.get("essayReviewedCount").asInt()).isEqualTo(1)
+        assertThat(summary.get("essayAnswerCount").asInt()).isEqualTo(1)
+        // 180/200 은 만점도 0점도 아닌 부분 점수 — 우측 패널 "채점 현황" 막대가 이걸 읽는다
+        val grading = results.get("questions")[1].get("essayGrading")
+        assertThat(grading.get("partial").asInt()).isEqualTo(1)
+        assertThat(grading.get("unreviewed").asInt()).isZero()
     }
 
     @Test
