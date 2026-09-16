@@ -59,6 +59,7 @@ class AnswerAnalysisController(
             analysisStatus = AnalysisStatus.of(state.feedback),
             chargedCoins = state.feedback?.chargedCoins ?: 0,
             remainingFreeAnalysis = state.remainingFreeCount,
+            freeAnalysisLimit = state.freeLimit,
             analysisCoinCost = state.coinCost,
         )
     }
