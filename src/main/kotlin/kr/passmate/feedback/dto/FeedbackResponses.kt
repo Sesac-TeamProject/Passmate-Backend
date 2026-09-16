@@ -71,6 +71,8 @@ data class MyAnswerResponse(
     val teacherReview: TeacherReviewView?,
     /** 이번 달 남은 무료 분석 횟수. 게스트는 분석 자체가 막혀 있어 null */
     val remainingFreeAnalysis: Int?,
+    /** 월 무료 한도 — 화면이 "무료 n/5 사용"을 그리려면 남은 수만으로는 부족하다 */
+    val freeAnalysisLimit: Int,
     /** 무료 한도를 넘겼을 때 1건당 차감할 코인 */
     val analysisCoinCost: Int,
 )
@@ -81,6 +83,8 @@ data class EssayAnalysisRequestResponse(
     /** 이번 요청에 실제로 차감된 코인. 0 이면 무료 한도로 처리됐다는 뜻 */
     val chargedCoins: Int,
     val remainingFreeAnalysis: Int,
+    /** 월 무료 한도 — 요청 직후 화면이 "n/5 사용"을 바로 갱신한다 */
+    val freeAnalysisLimit: Int,
     val analysisCoinCost: Int,
 )
 

@@ -177,7 +177,14 @@ class SessionService(
 
         room.close()
         recordRoomResult(room, questions)
-        val ranking = sessionQueryService.ranking(room.id)
+        // 최종 랭킹에도 직전 문항 대비 변동을 싣는다 — 마감 직후 RANKING_UPDATED 와 같은 기준.
+        // ranking() 으로 보내면 종료 화면에 오는 순간 변동 표시가 사라졌다(시연 2026-09-15)
+        val lastEndedOrderNo = sessionQueryService.sessionQuestions(room.id)
+            .filter { it.isEnded }
+            .maxOfOrNull { it.orderNo }
+        val ranking = lastEndedOrderNo
+            ?.let { sessionQueryService.rankingAsOf(room.id, it) }
+            ?: sessionQueryService.ranking(room.id)
         recordParticipantResults(room.id, ranking)
         eventPublisher.toRoom(room.id, SessionEventType.SESSION_ENDED, ranking)
 

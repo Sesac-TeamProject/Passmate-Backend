@@ -20,6 +20,16 @@ data class ResultSummary(
     val avgScore: Double,
     @field:Schema(description = "분석이 끝난 건수. 진행 중·실패는 세지 않는다")
     val aiAnalysisCount: Int,
+    @field:Schema(description = "한 문항이라도 제출한 참가자 수 — 요약 KPI \"제출 n / 전체\"")
+    val submittedParticipantCount: Int,
+    @field:Schema(description = "전 문항을 제출한 참가자 비율(%). 분모 = 참가자 전원")
+    val completionRate: Double,
+    @field:Schema(description = "참가자별 총 소요 시간의 평균(ms). 제출 기록이 없으면 null")
+    val avgElapsedMs: Long?,
+    @field:Schema(description = "서술형 답안 수 — \"서술형 채점 n/m\" 의 분모")
+    val essayAnswerCount: Int,
+    @field:Schema(description = "첨삭이 끝난 서술형 답안 수")
+    val essayReviewedCount: Int,
 )
 
 /** 문항별 정답률 (W-07 문항별 탭). */
@@ -38,6 +48,34 @@ data class QuestionResultRow(
     val aiAnalysisCount: Int,
     @field:Schema(description = "문항 단위 선생님 코멘트(학생 전체 대상, W-07). 답안별 첨삭과 별개. 없으면 null")
     val teacherComment: String?,
+    @field:Schema(description = "정답(객관식·OX) 또는 모범답안(서술형). 끝난 방을 호스트만 보는 화면이라 그대로 싣는다")
+    val answer: String?,
+    @field:Schema(description = "해설. 세트에 적지 않았으면 null")
+    val explanation: String?,
+    @field:Schema(description = "서술형 채점 분포 — 첨삭된 답안을 만점·부분·0점으로 나눈다. 서술형이 아니면 null")
+    val essayGrading: EssayGradingCounts?,
+    @field:Schema(description = "서술형 AI 분석 집계 — 잘 짚은 점·공통 누락 상위 3개. 분석된 답안이 없으면 null")
+    val aiInsight: EssayAiInsight?,
+)
+
+/**
+ * 서술형 채점 분포 (W-07 우측 패널 "채점 현황"). 서술형은 자동 채점이 없어 첨삭 점수로만 가른다.
+ * 첨삭 전 답안은 0점이지만 "오답"이 아니다 — 따로 센다.
+ */
+@Schema(description = "서술형 채점 분포")
+data class EssayGradingCounts(
+    @field:Schema(description = "만점 — 첨삭 점수가 배점과 같음") val full: Int,
+    @field:Schema(description = "부분 점수 — 0 초과 배점 미만") val partial: Int,
+    @field:Schema(description = "0점 — 첨삭에서 0점을 받음") val zero: Int,
+    @field:Schema(description = "제출했지만 아직 첨삭 전") val unreviewed: Int,
+)
+
+/** 서술형 AI 분석을 문항 단위로 모은 것 — 답안마다 흩어진 keyPoints·missingPoints 를 빈도순으로 */
+@Schema(description = "서술형 AI 분석 집계")
+data class EssayAiInsight(
+    @field:Schema(description = "분석이 끝난 답안 수") val analyzedCount: Int,
+    @field:Schema(description = "여러 답안이 공통으로 잘 짚은 점 — 빈도순 상위 3") val commonKeyPoints: List<String>,
+    @field:Schema(description = "여러 답안에서 공통으로 빠진 점 — 빈도순 상위 3") val commonMissingPoints: List<String>,
 )
 
 /** 학생별 점수·순위 (W-07 학생별 탭). */

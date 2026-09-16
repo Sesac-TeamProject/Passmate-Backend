@@ -23,6 +23,8 @@ data class PolicyProperties(
      * ai_generation_log 에서 kind=SET·status=SUCCESS 를 세므로 실패는 횟수를 깎지 않는다.
      */
     val aiFreeLimit: Int,
+    /** 강의자료 첨부 1건의 최대 크기(MB). 본문만 뽑아 쓰고 파일 자체는 보관하지 않는다 */
+    val materialMaxUploadMb: Int,
     /** 월 서술형 AI 분석 무료 횟수 (학생, FR-075) */
     val essayAnalysisFreeLimit: Int,
     /** 무료 한도를 넘겼을 때 분석 1건당 차감할 코인 (1 C = 1원) */

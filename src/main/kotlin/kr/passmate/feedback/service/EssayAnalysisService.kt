@@ -28,6 +28,8 @@ import java.time.LocalDateTime
 data class AnalysisState(
     val feedback: AiFeedback?,
     val remainingFreeCount: Int,
+    /** 월 무료 한도 — 응답이 "n/한도 사용"을 그릴 수 있게 함께 준다 */
+    val freeLimit: Int,
     val coinCost: Int,
 )
 
@@ -160,6 +162,7 @@ class EssayAnalysisService(
     fun state(feedback: AiFeedback?, userId: Long): AnalysisState = AnalysisState(
         feedback = feedback,
         remainingFreeCount = remainingFreeCount(userId),
+        freeLimit = policy.essayAnalysisFreeLimit,
         coinCost = policy.essayAnalysisCoinCost,
     )
 

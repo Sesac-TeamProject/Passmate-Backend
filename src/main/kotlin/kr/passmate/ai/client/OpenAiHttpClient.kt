@@ -53,7 +53,10 @@ class OpenAiHttpClient(
             buildMap {
                 put("model", model)
                 put("messages", listOf(generationSystemMessage(request), generationUserMessage(request)))
-                put("response_format", responseFormat("passmate_questions", generationSchema(request.types)))
+                put(
+                    "response_format",
+                    responseFormat("passmate_questions", generationSchema(request.types, request.difficulty)),
+                )
                 // reasoning_effort 는 추론 모델에서만 받는다. 값이 없으면 아예 보내지 않는다 —
                 // 지원하지 않는 모델에 보내면 400 이 난다
                 properties.reasoningEffort.takeIf { it.isNotBlank() }?.let { put("reasoning_effort", it) }
@@ -178,7 +181,14 @@ class OpenAiHttpClient(
                 appendLine()
                 appendLine("조건")
                 appendLine("- 구성: $plan (총 ${request.totalCount}문항, 이 순서대로)")
-                appendLine("- 난이도: ${request.difficulty.label}")
+                // 라벨 한 단어("보통")만 주면 모델이 자기 기본 난이도로 회귀한다(시연, 2026-09-15) —
+                // 난이도마다 판정 기준을 문장으로 준다
+                appendLine("- 난이도: ${request.difficulty.label} — ${request.difficulty.rubric}")
+                // 같은 개념을 표현만 바꿔 반복하던 사례(시연, 2026-09-15) — 문항마다 다른 측면을 맡긴다
+                appendLine(
+                    "- 문항끼리는 서로 다른 개념·소주제를 다룹니다. 같은 개념을 표현만 바꿔 다시 내지 말고, " +
+                        "각 문항이 주제의 다른 측면(정의·원리·응용·비교·사례)을 하나씩 맡습니다.",
+                )
                 appendLine("- content 는 학생에게 보여줄 문항 지문(질문)입니다. 답이나 설명을 쓰는 자리가 아닙니다.")
                 // 지문 안에 정답 단어가 그대로 있던 사례(시나리오 테스트, 2026-09-08) — 명시 규칙 + 서버 검증 이중 방어
                 appendLine("- 정답(answer)에 해당하는 단어·표현을 content 에 그대로 쓰지 않습니다. 지문에 답이 보이면 문제가 성립하지 않습니다.")
@@ -264,7 +274,7 @@ class OpenAiHttpClient(
          * OX 가 섞여 나오고, 그걸 아래 분포 검증이 걸러 502 가 됐다(웹 버그 리포트 B-23).
          * 스키마가 유형을 못 박으면 모델이 다른 유형을 낼 방법 자체가 없다.
          */
-        fun generationSchema(types: Collection<QuestionType>): Map<String, Any?> = mapOf(
+        fun generationSchema(types: Collection<QuestionType>, difficulty: Difficulty): Map<String, Any?> = mapOf(
             "type" to "object",
             "additionalProperties" to false,
             "required" to listOf("questions"),
@@ -294,9 +304,12 @@ class OpenAiHttpClient(
                                 "type" to listOf("string", "null"),
                                 "description" to "왜 그 답인지, 두 문장 이내",
                             ),
+                            // type enum 과 같은 기법(B-23) — 세 값을 다 열어 두면 모델이 요청과 다른
+                            // 라벨을 붙여 "어려움으로 요청했는데 목록엔 보통"이 남는다
                             "difficulty" to mapOf(
                                 "type" to "string",
-                                "enum" to Difficulty.entries.map { it.name },
+                                "enum" to listOf(difficulty.name),
+                                "description" to "요청한 난이도 그대로",
                             ),
                         ),
                     ),
@@ -328,6 +341,15 @@ class OpenAiHttpClient(
                 Difficulty.EASY -> "쉬움"
                 Difficulty.NORMAL -> "보통"
                 Difficulty.HARD -> "어려움"
+            }
+
+        /** 난이도의 조작적 정의 — 라벨만으로는 모델이 늘 중간 난이도를 낸다 */
+        val Difficulty.rubric: String
+            get() = when (this) {
+                Difficulty.EASY -> "정의·용어를 기억하면 바로 답할 수 있는 수준. 계산이나 여러 단계 추론을 요구하지 않습니다"
+                Difficulty.NORMAL -> "개념을 이해하고 새 상황에 적용하거나 두 개념을 비교해야 답할 수 있는 수준"
+                Difficulty.HARD ->
+                    "두 단계 이상의 추론·계산이 필요한 수준. 객관식은 그럴듯한 오답 보기를 섞고, 단순 암기로는 답할 수 없어야 합니다"
             }
     }
 }

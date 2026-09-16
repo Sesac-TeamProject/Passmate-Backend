@@ -12,6 +12,7 @@ import org.springframework.test.web.client.MockRestServiceServer
 import kr.passmate.question.domain.Difficulty
 import kr.passmate.question.domain.QuestionType
 import org.hamcrest.Matchers.contains
+import org.hamcrest.Matchers.containsString
 import org.springframework.test.web.client.match.MockRestRequestMatchers.header
 import org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath
 import org.springframework.test.web.client.match.MockRestRequestMatchers.method
@@ -123,6 +124,27 @@ class OpenAiHttpClientTest {
     }
 
     @Test
+    fun `문항 생성 스키마의 difficulty enum 은 요청한 난이도만 담고, 프롬프트에 루브릭·다양성 규칙이 실린다`() {
+        // 세 값을 다 열어 두면 모델이 요청과 다른 라벨을 붙인다 — "어려움으로 요청했는데 결과는 보통"(시연, 2026-09-15).
+        // type enum 을 요청 유형으로 좁힌 것(B-23)과 같은 기법이다
+        server.expect(requestTo("$LOCAL_DEAD_END/chat/completions"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(jsonPath(DIFFICULTY_ENUM_PATH, contains("HARD")))
+            // 난이도는 라벨 한 단어가 아니라 판정 기준 문장으로 나간다
+            .andExpect(jsonPath("$.messages[0].content", containsString("추론·계산")))
+            // 문항끼리 같은 개념을 반복하지 말라는 다양성 규칙도 함께 실린다
+            .andExpect(jsonPath("$.messages[0].content", containsString("서로 다른 개념")))
+            .andRespond(json(generationBody(mcq("첫째"), mcq("둘째"))))
+
+        val result = client.generateQuestions(
+            AiGenerationRequest(topic = "야구", counts = mapOf(QuestionType.MCQ to 2), difficulty = Difficulty.HARD),
+        )
+
+        assertThat(result.questions).hasSize(2)
+        server.verify()
+    }
+
+    @Test
     fun `요청과 다른 유형이 섞여 오면 재시도 가능한 실패로 본다`() {
         expectChat(generationBody(mcq("첫째"), ox("둘째")))
 
@@ -181,5 +203,7 @@ class OpenAiHttpClientTest {
 
         /** 요청 본문에서 문항 type 의 enum 이 놓이는 자리 */
         const val TYPE_ENUM_PATH = "$.response_format.json_schema.schema.properties.questions.items.properties.type.enum"
+        const val DIFFICULTY_ENUM_PATH =
+            "$.response_format.json_schema.schema.properties.questions.items.properties.difficulty.enum"
     }
 }
