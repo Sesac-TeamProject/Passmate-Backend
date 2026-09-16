@@ -26,6 +26,7 @@ repositories {
 
 val queryDslVersion = "5.1.0"
 val jjwtVersion = "0.12.7"
+val tikaVersion = "3.1.0"
 
 dependencies {
     // Spring
@@ -62,6 +63,12 @@ dependencies {
     // S3
     implementation(platform("software.amazon.awssdk:bom:2.54.7"))
     implementation("software.amazon.awssdk:s3")
+
+    // 강의자료 본문 추출 — PDF·워드·PPT 에서 텍스트만 뽑는다. 파일은 보관하지 않는다.
+    // 파서는 쓰는 형식만 넣는다 — standard-package 는 우리가 안 받는 형식까지 끌고 와 이미지가 커진다
+    implementation("org.apache.tika:tika-core:$tikaVersion")
+    implementation("org.apache.tika:tika-parser-pdf-module:$tikaVersion")
+    implementation("org.apache.tika:tika-parser-microsoft-module:$tikaVersion")
 
     // QR 코드 생성 (입장용) — 외부 서비스 없이 서버에서 만든다
     implementation("com.google.zxing:core:3.5.4")
