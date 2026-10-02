@@ -1,7 +1,7 @@
 # Passmate-Backend
 
-AI 기반 실시간 문제풀이 플랫폼 **PassMate**의 백엔드 서버.
-호스트가 문제 세트를 만들어 방을 열면, 참가자가 PIN·QR로 입장해 실시간으로 문제를 풀고 랭킹·AI 피드백을 받는다.
+AI 기반 실시간 문제풀이 플랫폼 [**PassMate**](https://passmate.kr/) 의 백엔드 서버.
+호스트가 문제 세트를 만들어 방을 열면, 참가자가 PIN·QR로 입장해 실시간으로 문제를 풀고 랭킹·AI 피드백을 받습니다.
 
 ## 기술 스택
 
@@ -67,6 +67,5 @@ Passmate-Backend/
 
 개발은 `develop`, 배포는 `main`. `develop` → `main` PR 머지 → GitHub Actions(test → 이미지 빌드 → ECR) → SSM으로 EC2 배포 → Flyway 적용 → `/actuator/health` 확인.
 
-이미지 빌드는 컨텍스트가 레포 루트다 — `docker build -f docker/Dockerfile -t passmate .`
+이미지 빌드는 컨텍스트가 레포 루트 — `docker build -f docker/Dockerfile -t passmate .`
 (Dockerfile 이 루트에 없으므로 워크플로·배포 플랫폼에 경로를 명시해야 한다).
-인프라는 AWS 단일 인스턴스(EC2 t3.micro + RDS MySQL + S3).
