@@ -159,3 +159,8 @@ passmate:
     jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
     token-uri: https://oauth2.googleapis.com/token
     issuers: https://accounts.google.com,accounts.google.com
+  apple:
+    # iOS 앱 번들 ID — 네이티브 Apple 로그인 토큰의 aud. 공개값이라 기본값으로 둔다(쉼표로 여러 개)
+    client-ids: ${APPLE_CLIENT_IDS:org.sesacteamproject.passmate.Passmate}
+    jwk-set-uri: https://appleid.apple.com/auth/keys
+    issuer: https://appleid.apple.com

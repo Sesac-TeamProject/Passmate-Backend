@@ -81,10 +81,14 @@ class UserService(
         return user
     }
 
-    /** 소셜 프로필 이름 → 이메일 아이디 → 고정 문구 순으로 닉네임을 정한다. 컬럼 상한은 30자. */
+    /**
+     * 소셜 프로필 이름 → 이메일 아이디 → 고정 문구 순으로 닉네임을 정한다. 컬럼 상한은 30자.
+     * Apple "이메일 가리기" 중계 주소는 아이디가 무작위 문자열이라 닉네임 후보에서 뺀다.
+     */
     private fun resolveNickname(name: String?, email: String?): String {
         val candidate = name?.trim()?.takeIf { it.isNotEmpty() }
-            ?: email?.substringBefore('@')?.trim()?.takeIf { it.isNotEmpty() }
+            ?: email?.takeUnless { it.endsWith(APPLE_PRIVATE_RELAY_DOMAIN, ignoreCase = true) }
+                ?.substringBefore('@')?.trim()?.takeIf { it.isNotEmpty() }
             ?: DEFAULT_NICKNAME
         return candidate.take(User.NICKNAME_MAX_LENGTH)
     }
@@ -100,5 +104,6 @@ class UserService(
 
     companion object {
         private const val DEFAULT_NICKNAME = "패스메이트 회원"
+        private const val APPLE_PRIVATE_RELAY_DOMAIN = "@privaterelay.appleid.com"
     }
 }

@@ -7,8 +7,8 @@ package kr.passmate.auth.client
 interface GoogleOAuthClient {
 
     /** 클라이언트가 받은 ID 토큰을 검증한다(웹 GIS · 모바일 SDK). */
-    fun verifyIdToken(idToken: String): GoogleAccount
+    fun verifyIdToken(idToken: String): SocialAccount
 
     /** 인가 코드를 Google 과 교환해 ID 토큰을 받고 검증한다(웹 리다이렉트 플로우). */
-    fun exchangeAuthorizationCode(code: String, redirectUri: String?): GoogleAccount
+    fun exchangeAuthorizationCode(code: String, redirectUri: String?): SocialAccount
 }

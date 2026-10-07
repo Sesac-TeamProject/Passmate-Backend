@@ -1,6 +1,6 @@
 package kr.passmate.support
 
-import kr.passmate.auth.client.GoogleAccount
+import kr.passmate.auth.client.SocialAccount
 import kr.passmate.auth.client.GoogleOAuthClient
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
@@ -11,14 +11,14 @@ import kr.passmate.common.exception.ErrorCode
  */
 class FakeGoogleOAuthClient : GoogleOAuthClient {
 
-    private val accountsByToken = mutableMapOf<String, GoogleAccount>()
-    private val accountsByCode = mutableMapOf<String, GoogleAccount>()
+    private val accountsByToken = mutableMapOf<String, SocialAccount>()
+    private val accountsByCode = mutableMapOf<String, SocialAccount>()
 
-    fun registerIdToken(idToken: String, account: GoogleAccount) {
+    fun registerIdToken(idToken: String, account: SocialAccount) {
         accountsByToken[idToken] = account
     }
 
-    fun registerAuthorizationCode(code: String, account: GoogleAccount) {
+    fun registerAuthorizationCode(code: String, account: SocialAccount) {
         accountsByCode[code] = account
     }
 
@@ -27,9 +27,9 @@ class FakeGoogleOAuthClient : GoogleOAuthClient {
         accountsByCode.clear()
     }
 
-    override fun verifyIdToken(idToken: String): GoogleAccount =
+    override fun verifyIdToken(idToken: String): SocialAccount =
         accountsByToken[idToken] ?: throw BusinessException(ErrorCode.SOCIAL_TOKEN_INVALID)
 
-    override fun exchangeAuthorizationCode(code: String, redirectUri: String?): GoogleAccount =
+    override fun exchangeAuthorizationCode(code: String, redirectUri: String?): SocialAccount =
         accountsByCode[code] ?: throw BusinessException(ErrorCode.SOCIAL_TOKEN_INVALID)
 }

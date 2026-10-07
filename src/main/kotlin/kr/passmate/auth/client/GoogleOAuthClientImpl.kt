@@ -42,7 +42,7 @@ class GoogleOAuthClientImpl(
             )
         }
 
-    override fun verifyIdToken(idToken: String): GoogleAccount {
+    override fun verifyIdToken(idToken: String): SocialAccount {
         if (properties.clientId.isBlank()) {
             throw BusinessException(ErrorCode.EXTERNAL_API_ERROR, "Google 클라이언트 ID가 설정되지 않았습니다.")
         }
@@ -52,10 +52,10 @@ class GoogleOAuthClientImpl(
             log.warn("Google ID 토큰 검증 실패", e)
             throw BusinessException(ErrorCode.SOCIAL_TOKEN_INVALID, cause = e)
         }
-        return jwt.toGoogleAccount()
+        return jwt.toSocialAccount()
     }
 
-    override fun exchangeAuthorizationCode(code: String, redirectUri: String?): GoogleAccount {
+    override fun exchangeAuthorizationCode(code: String, redirectUri: String?): SocialAccount {
         if (properties.clientSecret.isBlank()) {
             throw BusinessException(ErrorCode.EXTERNAL_API_ERROR, "Google 클라이언트 시크릿이 설정되지 않았습니다.")
         }
@@ -84,10 +84,10 @@ class GoogleOAuthClientImpl(
         return verifyIdToken(idToken)
     }
 
-    private fun Jwt.toGoogleAccount(): GoogleAccount {
+    private fun Jwt.toSocialAccount(): SocialAccount {
         val providerId = subject
             ?: throw BusinessException(ErrorCode.SOCIAL_TOKEN_INVALID, "Google 계정 식별자가 없습니다.")
-        return GoogleAccount(
+        return SocialAccount(
             providerId = providerId,
             email = getClaimAsString("email"),
             emailVerified = getClaim<Any?>("email_verified").toBooleanClaim(),
