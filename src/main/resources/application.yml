@@ -166,8 +166,8 @@ passmate:
     issuer: https://appleid.apple.com
     token-uri: https://appleid.apple.com/auth/token
     revoke-uri: https://appleid.apple.com/auth/revoke
-    # 탈퇴 시 Apple 연결 해제(토큰 폐기)용. 팀 ID·키 ID 는 공개값, 개인키(.p8 내용)는 비밀이라 SSM 으로만 넣는다.
-    # 셋 중 하나라도 비면 로그인은 되고 연결 해제만 건너뛴다
+    # 탈퇴 시 Apple 연결 해제(토큰 폐기)용. 팀 ID·키 ID 는 공개값이라 기본값으로 두고,
+    # 개인키(.p8 내용)는 비밀이라 SSM(APPLE_PRIVATE_KEY)으로만 넣는다. 비면 로그인은 되고 연결 해제만 건너뛴다
     team-id: ${APPLE_TEAM_ID:W345THX6Y6}
-    key-id: ${APPLE_KEY_ID:}
+    key-id: ${APPLE_KEY_ID:7959LD7D39}
     private-key: ${APPLE_PRIVATE_KEY:}
