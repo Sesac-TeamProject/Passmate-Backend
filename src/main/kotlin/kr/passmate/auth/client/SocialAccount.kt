@@ -9,4 +9,6 @@ data class SocialAccount(
     /** Apple 은 ID 토큰에 이름을 싣지 않는다 — 앱이 첫 인증 때만 받아 요청에 실어 보낸다. */
     val name: String?,
     val pictureUrl: String?,
+    /** 토큰이 발급된 클라이언트 ID(aud). Apple 코드 교환·토큰 폐기에만 쓴다 */
+    val clientId: String? = null,
 )

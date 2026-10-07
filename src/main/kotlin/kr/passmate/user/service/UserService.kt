@@ -51,6 +51,12 @@ class UserService(
     fun updateProfile(userId: Long, nickname: String, profileImageUrl: String?, defaultAvatarId: String?): User =
         getActiveUser(userId).apply { updateProfile(nickname, profileImageUrl, defaultAvatarId) }
 
+    /** Apple refresh token(암호문) 보관. 암호화·교환은 호출자(auth)가 끝내고 결과만 넘긴다 */
+    @Transactional
+    fun linkAppleRefreshToken(userId: Long, encryptedToken: String, clientId: String) {
+        getActiveUser(userId).linkAppleRefreshToken(encryptedToken, clientId)
+    }
+
     @Transactional(readOnly = true)
     fun getActiveUser(userId: Long): User {
         val user = userRepository.findById(userId).orElseThrow {

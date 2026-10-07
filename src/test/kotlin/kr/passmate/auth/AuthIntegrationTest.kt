@@ -6,9 +6,12 @@ import kr.passmate.auth.client.GoogleOAuthClient
 import kr.passmate.auth.client.SocialAccount
 import kr.passmate.coin.repository.CoinWalletRepository
 import kr.passmate.common.security.JwtTokenProvider
+import kr.passmate.common.security.TextEncryptor
 import kr.passmate.support.FakeAppleOAuthClient
 import kr.passmate.support.FakeGoogleOAuthClient
 import kr.passmate.support.IntegrationTestSupport
+import kr.passmate.user.domain.AuthProvider
+import kr.passmate.user.repository.UserRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -48,6 +51,8 @@ class AuthIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var appleOAuthClient: AppleOAuthClient
     @Autowired private lateinit var coinWalletRepository: CoinWalletRepository
     @Autowired private lateinit var jwtTokenProvider: JwtTokenProvider
+    @Autowired private lateinit var userRepository: UserRepository
+    @Autowired private lateinit var textEncryptor: TextEncryptor
 
     private val fake: FakeGoogleOAuthClient get() = googleOAuthClient as FakeGoogleOAuthClient
     private val fakeApple: FakeAppleOAuthClient get() = appleOAuthClient as FakeAppleOAuthClient
@@ -74,8 +79,10 @@ class AuthIntegrationTest : IntegrationTestSupport() {
                 emailVerified = true,
                 name = null,
                 pictureUrl = null,
+                clientId = APPLE_CLIENT_ID,
             ),
         )
+        fakeApple.registerAuthorizationCode(VALID_APPLE_CODE, "apple-refresh-token")
         fakeApple.registerIdToken(
             RELAY_APPLE_ID_TOKEN,
             SocialAccount(
@@ -140,7 +147,37 @@ class AuthIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `Apple 은 authorizationCode 로그인을 받지 않는다`() {
+    fun `Apple 인가 코드를 함께 보내면 refresh token 을 암호화해 보관한다`() {
+        appleLogin(VALID_APPLE_ID_TOKEN, code = VALID_APPLE_CODE).andExpect(status().isOk)
+
+        val user = userRepository.findByProviderAndProviderId(AuthProvider.APPLE, "apple-sub-1")!!
+        assertThat(user.appleRefreshToken).isNotEqualTo("apple-refresh-token")
+        assertThat(textEncryptor.decrypt(user.appleRefreshToken!!)).isEqualTo("apple-refresh-token")
+        assertThat(user.appleClientId).isEqualTo(APPLE_CLIENT_ID)
+    }
+
+    @Test
+    fun `Apple 인가 코드 교환이 실패해도 로그인은 된다`() {
+        appleLogin(VALID_APPLE_ID_TOKEN, code = "expired-code")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.accessToken").isNotEmpty)
+
+        val user = userRepository.findByProviderAndProviderId(AuthProvider.APPLE, "apple-sub-1")!!
+        assertThat(user.appleRefreshToken).isNull()
+    }
+
+    @Test
+    fun `Apple 키가 설정되지 않았으면 코드를 교환하지 않고 로그인만 한다`() {
+        fakeApple.isTokenApiConfigured = false
+
+        appleLogin(VALID_APPLE_ID_TOKEN, code = VALID_APPLE_CODE).andExpect(status().isOk)
+
+        val user = userRepository.findByProviderAndProviderId(AuthProvider.APPLE, "apple-sub-1")!!
+        assertThat(user.appleRefreshToken).isNull()
+    }
+
+    @Test
+    fun `Apple 은 authorizationCode 만으로는 로그인할 수 없다`() {
         mockMvc.perform(
             post("/auth/login/{provider}", "apple")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -294,10 +331,14 @@ class AuthIntegrationTest : IntegrationTestSupport() {
             .content("""{"idToken":"$idToken"}"""),
     )
 
-    private fun appleLogin(idToken: String, name: String? = null) = mockMvc.perform(
+    private fun appleLogin(idToken: String, name: String? = null, code: String? = null) = mockMvc.perform(
         post("/auth/login/{provider}", "apple")
             .contentType(MediaType.APPLICATION_JSON)
-            .content(objectMapper.writeValueAsString(mapOf("idToken" to idToken, "name" to name))),
+            .content(
+                objectMapper.writeValueAsString(
+                    mapOf("idToken" to idToken, "name" to name, "authorizationCode" to code),
+                ),
+            ),
     )
 
     @Suppress("UNCHECKED_CAST")
@@ -312,5 +353,7 @@ class AuthIntegrationTest : IntegrationTestSupport() {
         private const val VALID_ID_TOKEN = "valid-google-id-token"
         private const val VALID_APPLE_ID_TOKEN = "valid-apple-id-token"
         private const val RELAY_APPLE_ID_TOKEN = "relay-apple-id-token"
+        private const val VALID_APPLE_CODE = "valid-apple-code"
+        private const val APPLE_CLIENT_ID = "org.sesacteamproject.passmate.Passmate"
     }
 }

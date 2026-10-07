@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service
 class AuthService(
     private val googleOAuthClient: GoogleOAuthClient,
     private val appleOAuthClient: AppleOAuthClient,
+    private val appleTokenService: AppleTokenService,
     private val userService: UserService,
     private val jwtTokenProvider: JwtTokenProvider,
 ) {
@@ -44,6 +45,10 @@ class AuthService(
             profileImageUrl = account.pictureUrl,
         )
 
+        if (provider == AuthProvider.APPLE) {
+            // 탈퇴 때 Apple 연결을 끊으려고 refresh token 을 받아 둔다. 실패해도 로그인은 계속한다
+            appleTokenService.linkOnLogin(outcome.user.id, request.authorizationCode, account.clientId)
+        }
         if (outcome.isNewUser) {
             log.info("신규 가입 — userId={} provider={}", outcome.user.id, provider)
         }
@@ -74,6 +79,13 @@ class AuthService(
     private fun verifySocialAccount(provider: AuthProvider, request: SocialLoginRequest): SocialAccount =
         when (provider) {
             AuthProvider.GOOGLE -> when {
+                // 어느 쪽으로 검증할지 모호하므로 둘 다 오면 거절한다
+                !request.idToken.isNullOrBlank() && !request.authorizationCode.isNullOrBlank() ->
+                    throw BusinessException(
+                        ErrorCode.INVALID_INPUT,
+                        "idToken 또는 authorizationCode 중 하나만 보내야 합니다.",
+                    )
+
                 !request.idToken.isNullOrBlank() ->
                     googleOAuthClient.verifyIdToken(request.idToken)
 
@@ -86,7 +98,8 @@ class AuthService(
                 )
             }
 
-            // 네이티브(iOS) 로그인만 받는다 — 인가 코드 교환에는 client secret(.p8)이 필요해 열어 두지 않았다
+            // 네이티브(iOS) 로그인 — 계정 확인은 idToken 으로만 한다.
+            // 함께 오는 authorizationCode 는 로그인용이 아니라 탈퇴 시 연결 해제용 refresh token 을 받는 데 쓴다
             AuthProvider.APPLE -> when {
                 !request.idToken.isNullOrBlank() ->
                     appleOAuthClient.verifyIdToken(request.idToken)

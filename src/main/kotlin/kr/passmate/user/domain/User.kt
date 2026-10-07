@@ -63,6 +63,15 @@ class User(
     var deletedAt: LocalDateTime? = null
         protected set
 
+    /** Apple refresh token 암호문 — 탈퇴 때 Apple 연결을 끊는 데만 쓴다. 평문을 이 엔티티에 두지 않는다 */
+    @Column(name = "apple_refresh_token", length = 512)
+    var appleRefreshToken: String? = null
+        protected set
+
+    @Column(name = "apple_client_id", length = 100)
+    var appleClientId: String? = null
+        protected set
+
     val isActive: Boolean
         get() = status == UserStatus.ACTIVE
 
@@ -113,9 +122,17 @@ class User(
      * 대신 **누구였는지를 지운다** — 이메일·프로필 이미지를 비우고 닉네임을 익명으로 바꾼다.
      * user.nickname 에는 유니크 제약이 없어 여러 탈퇴 계정이 같은 값을 가져도 된다.
      */
+    /** 로그인 때 받은 Apple refresh token(암호문)을 보관한다. 새로 받으면 덮어쓴다 */
+    fun linkAppleRefreshToken(encryptedToken: String, clientId: String) {
+        appleRefreshToken = encryptedToken
+        appleClientId = clientId
+    }
+
     fun withdraw(at: LocalDateTime = LocalDateTime.now()) {
         status = UserStatus.DELETED
         deletedAt = at
+        appleRefreshToken = null
+        appleClientId = null
         email = null
         profileImageUrl = null
         defaultAvatarId = null
