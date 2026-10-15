@@ -132,6 +132,18 @@ class UserWithdrawIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `탈퇴한 소셜 계정으로 다시 로그인하면 기록 없는 새 회원으로 가입된다`() {
+        withdraw().andExpect(status().isNoContent)
+        userRepository.flush()
+
+        val rejoined = userService.loginOrRegister(AuthProvider.GOOGLE, "bye-user", "bye@example.com", "혜림", null)
+
+        assertThat(rejoined.isNewUser).isTrue()
+        assertThat(rejoined.user.id).isNotEqualTo(userId)
+        assertThat(userRepository.findById(userId).orElseThrow().status).isEqualTo(UserStatus.DELETED)
+    }
+
+    @Test
     fun `두 번 탈퇴할 수 없다`() {
         withdraw().andExpect(status().isNoContent)
 

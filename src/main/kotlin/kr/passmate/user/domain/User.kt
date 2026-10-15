@@ -24,8 +24,7 @@ class User(
     @Column(name = "provider", nullable = false, length = 20, updatable = false)
     val provider: AuthProvider,
 
-    @Column(name = "provider_id", nullable = false, length = 100, updatable = false)
-    val providerId: String,
+    providerId: String,
 
     @Column(name = "email", length = 255)
     var email: String? = null,
@@ -39,6 +38,11 @@ class User(
     @Column(name = "default_avatar_id", length = 30)
     var defaultAvatarId: String? = null,
 ) : BaseTimeEntity() {
+
+    /** 소셜 계정 식별자(구글 sub·Apple sub). 탈퇴하면 연결을 끊으려고 바꾼다 — withdraw() 참고 */
+    @Column(name = "provider_id", nullable = false, length = 100)
+    var providerId: String = providerId
+        protected set
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -128,9 +132,16 @@ class User(
         appleClientId = clientId
     }
 
+    /**
+     * 탈퇴 — 행은 남기고(기록이 FK 로 가리킨다) 누구였는지를 지운다.
+     * 소셜 계정 연결도 끊는다: 구글·Apple 은 같은 사람에게 같은 sub 를 계속 주므로, 남겨 두면
+     * 같은 계정으로 다시 로그인할 때 이 탈퇴 행이 잡혀 영영 재가입할 수 없다(uk_user_provider).
+     * 재로그인은 기록 없는 새 회원으로 가입된다.
+     */
     fun withdraw(at: LocalDateTime = LocalDateTime.now()) {
         status = UserStatus.DELETED
         deletedAt = at
+        providerId = "$WITHDRAWN_PROVIDER_ID_PREFIX$id"
         appleRefreshToken = null
         appleClientId = null
         email = null
@@ -145,5 +156,8 @@ class User(
 
         /** 탈퇴한 계정의 표시 이름. 지난 세션 랭킹에도 이 이름으로 남는다 */
         const val WITHDRAWN_NICKNAME = "탈퇴한 사용자"
+
+        /** 탈퇴한 계정의 provider_id 접두어. 뒤에 회원 id 를 붙여 uk_user_provider 를 지킨다(V9 와 같은 규칙) */
+        const val WITHDRAWN_PROVIDER_ID_PREFIX = "withdrawn:"
     }
 }
