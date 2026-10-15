@@ -121,6 +121,14 @@ class UserServiceTest {
             .isEqualTo(ErrorCode.USER_NOT_FOUND)
     }
 
+    @Test
+    fun `탈퇴하면 소셜 계정 연결을 끊는다 — 같은 계정으로 다시 가입할 수 있게`() {
+        val withdrawn = activeUser().apply { withdraw() }
+
+        assertThat(withdrawn.providerId).isNotEqualTo("google-1")
+        assertThat(withdrawn.providerId).startsWith(User.WITHDRAWN_PROVIDER_ID_PREFIX)
+    }
+
     private fun activeUser(nickname: String = "닉네임") = User(
         provider = AuthProvider.GOOGLE,
         providerId = "google-1",
