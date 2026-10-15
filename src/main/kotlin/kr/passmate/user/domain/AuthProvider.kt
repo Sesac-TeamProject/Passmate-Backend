@@ -4,11 +4,12 @@ import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 
 /**
- * 소셜 로그인 제공자. 현재 허용값은 GOOGLE 하나뿐이고,
- * APPLE 은 앱 스토어 심사 요건이 생기면 추가한다(기능 명세서 v2 FR-001).
+ * 소셜 로그인 제공자(기능 명세서 v2 FR-001).
+ * APPLE 은 iOS 앱 전용이다 — 제3자 로그인을 제공하는 앱은 Apple 로그인도 함께 제공해야 한다(App Store 심사 지침 4.8).
  */
 enum class AuthProvider {
     GOOGLE,
+    APPLE,
     ;
 
     companion object {

@@ -2,6 +2,7 @@ package kr.passmate.user
 
 import kr.passmate.coin.repository.CoinTransactionRepository
 import kr.passmate.coin.repository.CoinWalletRepository
+import kr.passmate.common.event.UserWithdrawnEvent
 import kr.passmate.common.security.JwtTokenProvider
 import kr.passmate.room.domain.RoomType
 import kr.passmate.room.dto.RoomCreateRequest
@@ -17,6 +18,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.test.context.event.ApplicationEvents
+import org.springframework.test.context.event.RecordApplicationEvents
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
@@ -30,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional
  */
 @AutoConfigureMockMvc
 @Transactional
+@RecordApplicationEvents
 class UserWithdrawIntegrationTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var mockMvc: MockMvc
@@ -39,6 +43,7 @@ class UserWithdrawIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var coinWalletRepository: CoinWalletRepository
     @Autowired private lateinit var coinTransactionRepository: CoinTransactionRepository
     @Autowired private lateinit var jwtTokenProvider: JwtTokenProvider
+    @Autowired private lateinit var applicationEvents: ApplicationEvents
 
     private var userId: Long = 0
     private lateinit var token: String
@@ -75,6 +80,22 @@ class UserWithdrawIntegrationTest : IntegrationTestSupport() {
         mockMvc.perform(get("/users/me").header(AUTH, "Bearer $token"))
             .andExpect(status().isUnauthorized)
             .andExpect(jsonPath("$.code").value("TOKEN_INVALID"))
+    }
+
+    @Test
+    fun `Apple 회원이 탈퇴하면 보관한 토큰을 지우고 폐기 이벤트에 실어 보낸다`() {
+        val apple = userService.loginOrRegister(AuthProvider.APPLE, "apple-bye", null, "승혁", null).user
+        userService.linkAppleRefreshToken(apple.id, "cipher-text", "org.sesacteamproject.passmate.Passmate")
+        val appleToken = jwtTokenProvider.issue(apple.id, false).accessToken
+
+        mockMvc.perform(delete("/users/me").header(AUTH, "Bearer $appleToken")).andExpect(status().isNoContent)
+
+        val withdrawn = userRepository.findById(apple.id).orElseThrow()
+        assertThat(withdrawn.appleRefreshToken).isNull()
+        assertThat(withdrawn.appleClientId).isNull()
+        // 실제 폐기 호출은 커밋 뒤(AFTER_COMMIT)라 롤백되는 이 테스트에서는 돌지 않는다 — 이벤트 내용까지만 본다
+        assertThat(applicationEvents.stream(UserWithdrawnEvent::class.java))
+            .containsExactly(UserWithdrawnEvent(apple.id, "cipher-text", "org.sesacteamproject.passmate.Passmate"))
     }
 
     @Test

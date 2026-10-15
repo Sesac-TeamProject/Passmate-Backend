@@ -1,12 +1,17 @@
 package kr.passmate.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import kr.passmate.auth.client.GoogleAccount
+import kr.passmate.auth.client.AppleOAuthClient
 import kr.passmate.auth.client.GoogleOAuthClient
+import kr.passmate.auth.client.SocialAccount
 import kr.passmate.coin.repository.CoinWalletRepository
 import kr.passmate.common.security.JwtTokenProvider
+import kr.passmate.common.security.TextEncryptor
+import kr.passmate.support.FakeAppleOAuthClient
 import kr.passmate.support.FakeGoogleOAuthClient
 import kr.passmate.support.IntegrationTestSupport
+import kr.passmate.user.domain.AuthProvider
+import kr.passmate.user.repository.UserRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -34,27 +39,58 @@ class AuthIntegrationTest : IntegrationTestSupport() {
         @Bean
         @Primary
         fun fakeGoogleOAuthClient(): GoogleOAuthClient = FakeGoogleOAuthClient()
+
+        @Bean
+        @Primary
+        fun fakeAppleOAuthClient(): AppleOAuthClient = FakeAppleOAuthClient()
     }
 
     @Autowired private lateinit var mockMvc: MockMvc
     @Autowired private lateinit var objectMapper: ObjectMapper
     @Autowired private lateinit var googleOAuthClient: GoogleOAuthClient
+    @Autowired private lateinit var appleOAuthClient: AppleOAuthClient
     @Autowired private lateinit var coinWalletRepository: CoinWalletRepository
     @Autowired private lateinit var jwtTokenProvider: JwtTokenProvider
+    @Autowired private lateinit var userRepository: UserRepository
+    @Autowired private lateinit var textEncryptor: TextEncryptor
 
     private val fake: FakeGoogleOAuthClient get() = googleOAuthClient as FakeGoogleOAuthClient
+    private val fakeApple: FakeAppleOAuthClient get() = appleOAuthClient as FakeAppleOAuthClient
 
     @BeforeEach
     fun setUp() {
         fake.reset()
         fake.registerIdToken(
             VALID_ID_TOKEN,
-            GoogleAccount(
+            SocialAccount(
                 providerId = "google-sub-1",
                 email = "hyerim@example.com",
                 emailVerified = true,
                 name = "혜림",
                 pictureUrl = "https://img.example.com/1.png",
+            ),
+        )
+        fakeApple.reset()
+        fakeApple.registerIdToken(
+            VALID_APPLE_ID_TOKEN,
+            SocialAccount(
+                providerId = "apple-sub-1",
+                email = "seunghyuk@example.com",
+                emailVerified = true,
+                name = null,
+                pictureUrl = null,
+                clientId = APPLE_CLIENT_ID,
+            ),
+        )
+        fakeApple.registerAuthorizationCode(VALID_APPLE_CODE, "apple-refresh-token")
+        fakeApple.registerIdToken(
+            RELAY_APPLE_ID_TOKEN,
+            SocialAccount(
+                providerId = "apple-sub-2",
+                email = "x7k2m9q4ab@privaterelay.appleid.com",
+                emailVerified = true,
+                name = null,
+                pictureUrl = null,
             ),
         )
     }
@@ -81,6 +117,81 @@ class AuthIntegrationTest : IntegrationTestSupport() {
         login(VALID_ID_TOKEN)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.isNewUser").value(false))
+    }
+
+    @Test
+    fun `Apple 로 처음 로그인하면 앱이 보낸 이름으로 가입된다`() {
+        appleLogin(VALID_APPLE_ID_TOKEN, name = "승혁")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.isNewUser").value(true))
+            .andExpect(jsonPath("$.user.nickname").value("승혁"))
+            .andExpect(jsonPath("$.user.email").value("seunghyuk@example.com"))
+            .andExpect(jsonPath("$.accessToken").isNotEmpty)
+    }
+
+    @Test
+    fun `Apple 재로그인은 이름 없이도 같은 계정이다`() {
+        appleLogin(VALID_APPLE_ID_TOKEN, name = "승혁").andExpect(status().isOk)
+
+        appleLogin(VALID_APPLE_ID_TOKEN)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.isNewUser").value(false))
+            .andExpect(jsonPath("$.user.nickname").value("승혁"))
+    }
+
+    @Test
+    fun `Apple 이메일 가리기 중계 주소는 닉네임으로 쓰지 않는다`() {
+        appleLogin(RELAY_APPLE_ID_TOKEN)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.user.nickname").value("패스메이트 회원"))
+    }
+
+    @Test
+    fun `Apple 인가 코드를 함께 보내면 refresh token 을 암호화해 보관한다`() {
+        appleLogin(VALID_APPLE_ID_TOKEN, code = VALID_APPLE_CODE).andExpect(status().isOk)
+
+        val user = userRepository.findByProviderAndProviderId(AuthProvider.APPLE, "apple-sub-1")!!
+        assertThat(user.appleRefreshToken).isNotEqualTo("apple-refresh-token")
+        assertThat(textEncryptor.decrypt(user.appleRefreshToken!!)).isEqualTo("apple-refresh-token")
+        assertThat(user.appleClientId).isEqualTo(APPLE_CLIENT_ID)
+    }
+
+    @Test
+    fun `Apple 인가 코드 교환이 실패해도 로그인은 된다`() {
+        appleLogin(VALID_APPLE_ID_TOKEN, code = "expired-code")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.accessToken").isNotEmpty)
+
+        val user = userRepository.findByProviderAndProviderId(AuthProvider.APPLE, "apple-sub-1")!!
+        assertThat(user.appleRefreshToken).isNull()
+    }
+
+    @Test
+    fun `Apple 키가 설정되지 않았으면 코드를 교환하지 않고 로그인만 한다`() {
+        fakeApple.isTokenApiConfigured = false
+
+        appleLogin(VALID_APPLE_ID_TOKEN, code = VALID_APPLE_CODE).andExpect(status().isOk)
+
+        val user = userRepository.findByProviderAndProviderId(AuthProvider.APPLE, "apple-sub-1")!!
+        assertThat(user.appleRefreshToken).isNull()
+    }
+
+    @Test
+    fun `Apple 은 authorizationCode 만으로는 로그인할 수 없다`() {
+        mockMvc.perform(
+            post("/auth/login/{provider}", "apple")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"authorizationCode":"code"}"""),
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+    }
+
+    @Test
+    fun `검증되지 않은 Apple 토큰은 401 이다`() {
+        appleLogin("unknown-token")
+            .andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.code").value("SOCIAL_TOKEN_INVALID"))
     }
 
     @Test
@@ -220,6 +331,16 @@ class AuthIntegrationTest : IntegrationTestSupport() {
             .content("""{"idToken":"$idToken"}"""),
     )
 
+    private fun appleLogin(idToken: String, name: String? = null, code: String? = null) = mockMvc.perform(
+        post("/auth/login/{provider}", "apple")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                objectMapper.writeValueAsString(
+                    mapOf("idToken" to idToken, "name" to name, "authorizationCode" to code),
+                ),
+            ),
+    )
+
     @Suppress("UNCHECKED_CAST")
     private fun <T> MvcResult.read(path: String): T {
         val body = objectMapper.readTree(response.contentAsString)
@@ -230,5 +351,9 @@ class AuthIntegrationTest : IntegrationTestSupport() {
 
     companion object {
         private const val VALID_ID_TOKEN = "valid-google-id-token"
+        private const val VALID_APPLE_ID_TOKEN = "valid-apple-id-token"
+        private const val RELAY_APPLE_ID_TOKEN = "relay-apple-id-token"
+        private const val VALID_APPLE_CODE = "valid-apple-code"
+        private const val APPLE_CLIENT_ID = "org.sesacteamproject.passmate.Passmate"
     }
 }

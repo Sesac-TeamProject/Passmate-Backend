@@ -27,8 +27,8 @@ class AuthController(
 ) {
 
     @Operation(
-        summary = "구글 로그인(회원가입 겸용)",
-        description = "미가입이면 자동 가입하고 isNewUser 와 함께 토큰을 발급한다. provider 허용값은 google 뿐이다.",
+        summary = "소셜 로그인(회원가입 겸용)",
+        description = "미가입이면 자동 가입하고 isNewUser 와 함께 토큰을 발급한다. provider 허용값은 google·apple 이다(apple 은 idToken 만).",
     )
     @PostMapping("/login/{provider}")
     fun login(

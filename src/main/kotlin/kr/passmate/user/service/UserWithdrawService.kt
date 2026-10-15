@@ -1,10 +1,12 @@
 package kr.passmate.user.service
 
 import kr.passmate.coin.service.CoinService
+import kr.passmate.common.event.UserWithdrawnEvent
 import kr.passmate.common.exception.BusinessException
 import kr.passmate.common.exception.ErrorCode
 import kr.passmate.room.service.RoomStatsService
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -19,6 +21,7 @@ class UserWithdrawService(
     private val userService: UserService,
     private val roomStatsService: RoomStatsService,
     private val coinService: CoinService,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -37,7 +40,10 @@ class UserWithdrawService(
 
         // 보유 코인 소멸. 원장에는 소멸 기록이 한 줄 남는다
         coinService.forfeitAll(userId, memo = "회원 탈퇴로 코인 소멸")
+        // withdraw() 가 Apple 토큰을 지우므로 지우기 전 값을 실어 보낸다. 폐기 호출은 커밋 뒤에 한다
+        val event = UserWithdrawnEvent(userId, user.appleRefreshToken, user.appleClientId)
         user.withdraw()
+        eventPublisher.publishEvent(event)
         log.info("회원이 탈퇴했다 userId={}", userId)
     }
 }

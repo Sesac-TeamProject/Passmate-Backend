@@ -1,7 +1,8 @@
 package kr.passmate.auth.service
 
-import kr.passmate.auth.client.GoogleAccount
+import kr.passmate.auth.client.AppleOAuthClient
 import kr.passmate.auth.client.GoogleOAuthClient
+import kr.passmate.auth.client.SocialAccount
 import kr.passmate.auth.dto.LoginResponse
 import kr.passmate.auth.dto.SocialLoginRequest
 import kr.passmate.auth.dto.TokenRefreshRequest
@@ -15,14 +16,16 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 /**
- * 회원가입·로그인은 Google 소셜 로그인으로 통일한다(FR-001).
+ * 회원가입·로그인은 소셜 로그인으로 통일한다(FR-001) — Google, 그리고 iOS 앱의 Apple.
  *
- * 이 클래스에는 @Transactional 을 붙이지 않는다 — Google 호출이 트랜잭션 안에 들어가면
+ * 이 클래스에는 @Transactional 을 붙이지 않는다 — Google·Apple 호출이 트랜잭션 안에 들어가면
  * 외부 응답이 늦어질 때 커넥션을 잡아먹는다. 검증을 먼저 끝내고 결과만 UserService 에 넘긴다.
  */
 @Service
 class AuthService(
     private val googleOAuthClient: GoogleOAuthClient,
+    private val appleOAuthClient: AppleOAuthClient,
+    private val appleTokenService: AppleTokenService,
     private val userService: UserService,
     private val jwtTokenProvider: JwtTokenProvider,
 ) {
@@ -37,10 +40,15 @@ class AuthService(
             provider = provider,
             providerId = account.providerId,
             email = account.email,
-            name = account.name,
+            // Apple 은 이름을 토큰에 싣지 않아 앱이 첫 인증 때 받은 값을 본문으로 보낸다
+            name = account.name ?: request.name,
             profileImageUrl = account.pictureUrl,
         )
 
+        if (provider == AuthProvider.APPLE) {
+            // 탈퇴 때 Apple 연결을 끊으려고 refresh token 을 받아 둔다. 실패해도 로그인은 계속한다
+            appleTokenService.linkOnLogin(outcome.user.id, request.authorizationCode, account.clientId)
+        }
         if (outcome.isNewUser) {
             log.info("신규 가입 — userId={} provider={}", outcome.user.id, provider)
         }
@@ -68,9 +76,16 @@ class AuthService(
         log.info("로그아웃 — userId={}", userId)
     }
 
-    private fun verifySocialAccount(provider: AuthProvider, request: SocialLoginRequest): GoogleAccount =
+    private fun verifySocialAccount(provider: AuthProvider, request: SocialLoginRequest): SocialAccount =
         when (provider) {
             AuthProvider.GOOGLE -> when {
+                // 어느 쪽으로 검증할지 모호하므로 둘 다 오면 거절한다
+                !request.idToken.isNullOrBlank() && !request.authorizationCode.isNullOrBlank() ->
+                    throw BusinessException(
+                        ErrorCode.INVALID_INPUT,
+                        "idToken 또는 authorizationCode 중 하나만 보내야 합니다.",
+                    )
+
                 !request.idToken.isNullOrBlank() ->
                     googleOAuthClient.verifyIdToken(request.idToken)
 
@@ -80,6 +95,18 @@ class AuthService(
                 else -> throw BusinessException(
                     ErrorCode.INVALID_INPUT,
                     "idToken 또는 authorizationCode 가 필요합니다.",
+                )
+            }
+
+            // 네이티브(iOS) 로그인 — 계정 확인은 idToken 으로만 한다.
+            // 함께 오는 authorizationCode 는 로그인용이 아니라 탈퇴 시 연결 해제용 refresh token 을 받는 데 쓴다
+            AuthProvider.APPLE -> when {
+                !request.idToken.isNullOrBlank() ->
+                    appleOAuthClient.verifyIdToken(request.idToken)
+
+                else -> throw BusinessException(
+                    ErrorCode.INVALID_INPUT,
+                    "Apple 로그인은 idToken 이 필요합니다.",
                 )
             }
         }
